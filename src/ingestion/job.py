@@ -1,11 +1,10 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Protocol
 
 from .pit_query import filter_point_in_time
 from .quality_gate import BatchMetrics, evaluate_quality
-from .repository import InMemoryRepository
 from .revision_store import RevisionStore
 from .source_registry import SourceDescriptor, evaluate_source
 
@@ -18,6 +17,16 @@ class JobResult:
     dashboard: dict[str, int]
 
 
+class IngestionRepositoryProtocol(Protocol):
+    def write_raw(self, row: Mapping[str, object]) -> None: ...
+
+    def write_canonical(self, row: Mapping[str, object]) -> None: ...
+
+    def write_quarantine(self, reason: str, payload: Mapping[str, object]) -> None: ...
+
+    def snapshot_counts(self) -> dict[str, int]: ...
+
+
 def run_ingestion_job(
     source: SourceDescriptor,
     metrics: BatchMetrics,
@@ -25,7 +34,7 @@ def run_ingestion_job(
     payload: Mapping[str, object],
     rows: list[dict[str, object]],
     decision_time: datetime,
-    repository: InMemoryRepository,
+    repository: IngestionRepositoryProtocol,
     revision_store: Optional[RevisionStore] = None,
 ) -> JobResult:
     store = revision_store or RevisionStore()
