@@ -44,3 +44,13 @@ Environment variables:
   - last run status/time
   - raw/canonical/quarantine counters
   - recent run history
+
+### Streamlit Community Cloud Deployment
+
+1. Go to `https://share.streamlit.io` and sign in with GitHub.
+2. Click `Create app`.
+3. Select repository: `finance-flow-labs/finance-flow-labs`.
+4. Select branch: `main`.
+5. Set Main file path: `streamlit_app.py`.
+6. Set Secret: `SUPABASE_DB_URL` (or `DATABASE_URL`).
+7. Deploy and copy the generated app URL (`https://<app-name>.streamlit.app`).
