@@ -1,109 +1,92 @@
 ---
 name: macro-opencode-analysis
-description: OpenCode 에이전트 실행(Codex xhigh)으로 finance-flow-labs의 매크로 분석 기능을 구현/개선한다. 퀀트 시그널, strategist/risk 분석문 생성, DB 저장, CLI 연결, 대시보드 노출을 다룰 때 사용한다. 애플리케이션 코드에 직접 OpenAI HTTP 호출을 넣지 않도록 강제해야 할 때 이 스킬을 사용한다.
+description: finance-flow-labs에서 매크로 분석 파이프라인(quant 신호 계산, strategist/risk 관점 생성, 합성, DB 저장, CLI 실행)을 구현하거나 수정할 때 사용한다. 애플리케이션 코드에 직접 OpenAI HTTP 호출을 넣지 않고 OpenCode 실행 경로와 결정론적 fallback을 유지해야 하는 작업에 적용한다.
 ---
 
-# 매크로 OpenCode 분석
+# 매크로 분석 구현
 
 ## 개요
 
-`finance-flow-labs`의 매크로 분석 기능을 OpenCode 에이전트 워크플로로 구현한다.
+이 스킬은 `finance-flow-labs`의 매크로 분석 기능을 일관된 구조로 구현하기 위한 작업 지침이다.
 
-분석 텍스트 생성은 OpenCode 실행 경로 또는 결정론적(fallback) 경로를 사용하고, 애플리케이션 코드에 직접 OpenAI HTTP 요청을 추가하지 않는다.
+핵심 원칙은 아래 두 가지다.
+- 분석 텍스트는 OpenCode 실행 경로를 사용해 생성한다.
+- 앱 코드에는 직접 OpenAI HTTP 호출을 추가하지 않는다.
 
-## 필수 규칙
+## 작업 범위
 
-- 구현 실행은 OpenCode를 사용한다.
-- OpenCode 실행 모델은 Codex xhigh를 사용한다.
-- 구현 시작 전에 아래 "슈퍼파워 필수 스킬 세트"를 프롬프트에 명시한다.
-- 앱 코드에 OpenAI 직접 호출(`urllib`/`requests`로 OpenAI 엔드포인트 호출)을 추가하지 않는다.
-- 기능 단위로 PR을 분리하고, 완료 시 PR URL을 공유한다.
-
-## REQUIRED 슈퍼파워 스킬 세트
-
-구현성 작업(코드/테스트/문서 수정)에서는 아래 5개 스킬을 REQUIRED 세트로 명시적으로 포함한다.
-
-- `superpowers/using-superpowers`: 스킬 적용 규칙과 우선순위 강제
-- `superpowers/writing-plans`: 작업 분해와 계획 품질 기준 적용
-- `superpowers/test-driven-development`: 테스트 우선(RED-GREEN-REFACTOR) 강제
-- `superpowers/verification-before-completion`: 완료 주장 전 검증 증거 강제
-- `superpowers/requesting-code-review`: 변경 완료 후 코드리뷰 요청 절차 강제
-
-누락 시 구현을 시작하지 않는다.
-
-프롬프트 본문에는 아래 문구를 그대로 넣는다.
-
-`REQUIRED 슈퍼파워 스킬 세트: superpowers/using-superpowers, superpowers/writing-plans, superpowers/test-driven-development, superpowers/verification-before-completion, superpowers/requesting-code-review`
-
-## 빠른 시작
-
-1. `references/finance-flow-labs-context.md`를 읽는다.
-2. 프롬프트 품질이 흔들리면 `references/opencode-prompt-template.md`를 사용한다.
-3. 기능 범위를 한 덩어리(단일 슬라이스)로 고정한다.
-4. 검증을 실행한다(`PYTHONPATH=. pytest -q` + 필요한 스모크 테스트).
-5. 커밋 후 PR을 연다.
-
-### OpenCode 명령 예시(슈퍼파워 사용 가이드 포함)
-
-```bash
-opencode run -m openai/gpt-5.3-codex --variant xhigh "REQUIRED 슈퍼파워 스킬 세트: superpowers/using-superpowers, superpowers/writing-plans, superpowers/test-driven-development, superpowers/verification-before-completion, superpowers/requesting-code-review. 각 스킬을 먼저 호출한 뒤 구현을 시작해라. 슈퍼파워 스킬 누락 시 구현을 시작하지 마라. task()/subagent 없이 구현하고, 앱 코드에 OpenAI 직접 HTTP 호출은 추가하지 마라."
-```
+아래 중 **한 가지 기능 슬라이스**만 선택해 구현한다.
+- 퀀트 시그널 계산 로직 수정
+- strategist/risk 생성 경로 수정
+- 합성(synthesis) 규칙 수정
+- 저장소/스키마 연동 수정
+- CLI 옵션/동작 수정
+- 대시보드 노출 경로 수정
 
 ## 구현 워크플로
 
-### 1) 단일 기능 슬라이스로 범위를 고정한다
+### 1) 범위 고정
 
-아래 중 정확히 하나를 선택한다.
-- 퀀트 시그널 로직 수정
-- strategist/risk 생성 경로 수정
-- 저장 스키마/리포지토리 수정
-- CLI 옵션/러너 수정
-- 대시보드 섹션 수정
+한 PR에는 하나의 기능 슬라이스만 포함한다.
 
-### 2) 레이어 경계를 지킨다
+### 2) 레이어 경계 유지
 
-- `src/research/macro_analysis.py`: 퀀트 로직만 담당
-- `src/research/agent_views.py`: 결정론적 합성/뷰 구성 담당
-- `src/research/opencode_runner.py`: OpenCode 호출 + JSON 파싱/실패 처리 담당
-- `src/research/flow_runner.py`: 오케스트레이션 + 저장 연결 담당
-- `src/ingestion/cli.py`: 명령 인터페이스만 담당
+- `src/research/macro_analysis.py`: 퀀트 로직
+- `src/research/agent_views.py`: 결정론적 합성/뷰 구성
+- `src/research/opencode_runner.py`: OpenCode 호출 및 응답 파싱
+- `src/research/flow_runner.py`: 오케스트레이션 및 저장 연결
+- `src/ingestion/cli.py`: 명령 인터페이스
 
-### 3) OpenAI 직접 호출 금지를 검증한다
+### 3) 생성 경로 구현
 
-수정 전/후 아래를 확인한다.
+- strategist/risk 텍스트는 OpenCode runner에서 생성한다.
+- 실행 실패/파싱 실패 시 결정론적 fallback으로 안전하게 복구한다.
+
+### 4) 저장 및 실행 연결
+
+- 분석 결과를 repository 계층으로 저장한다.
+- CLI 실행 시 엔진/모델 모드가 결과 요약에 드러나게 유지한다.
+
+### 5) 테스트 보강
+
+아래 테스트를 기능에 맞게 추가/수정한다.
+- `tests/test_macro_analysis_pipeline.py`
+- `tests/test_macro_analysis_cli.py`
+- 필요 시 repository/smoke 테스트
+
+## 필수 품질 기준
+
+### 직접 OpenAI HTTP 호출 금지
+
+수정 전/후 아래 명령으로 확인한다.
 
 ```bash
 grep -RIn "api.openai.com\|chat/completions\|responses" src
 ```
 
-애플리케이션 플로우 파일에서 결과가 비어 있어야 한다.
+매크로 분석 플로우 코드에서 결과가 비어 있어야 한다.
 
-### 4) 테스트로 검증한다
+### fallback 보장
 
-아래를 실행한다.
+OpenCode 실행 실패 시에도 파이프라인은 결정론적 출력으로 완료되어야 하며, 해당 경로를 테스트로 보장한다.
+
+## 검증 명령
 
 ```bash
 PYTHONPATH=. pytest -q
 ```
 
-CLI 변경이 있으면 PR 설명에 스모크 실행 커맨드를 포함한다.
+CLI 변경이 있다면 PR 본문에 스모크 실행 커맨드를 함께 남긴다.
 
-## PR 작성 기준
+## PR 체크리스트
 
-모든 기능 PR에는 아래를 포함한다.
-- 무엇이 바뀌었는지(모듈 단위 요약)
-- OpenCode 에이전트 아키텍처를 어떻게 유지했는지
+- 변경 파일/모듈 요약
+- 아키텍처 준수 여부(직접 HTTP 호출 없음)
 - 테스트 결과(`PYTHONPATH=. pytest -q`)
-- 마이그레이션/수동 작업 여부
+- 마이그레이션 또는 수동 작업 필요 여부
+- PR URL 공유
 
 ## 참고 문서
 
-- 저장소 구조/계약/명령 패턴: `references/finance-flow-labs-context.md`
-- OpenCode 실행 프롬프트 템플릿: `references/opencode-prompt-template.md`
-
-## 자주 하는 실수
-
-- `cli.py`에 오케스트레이션 로직을 섞어 넣기
-- 앱 코드에 직접 provider HTTP 클라이언트를 다시 추가하기
-- 여러 기능 슬라이스를 하나의 PR에 묶기
-- 러너 실패 시 fallback 경로 테스트를 생략하기
+- 저장소 구조/테이블/테스트 맵: `references/finance-flow-labs-context.md`
+- 구현용 프롬프트 템플릿: `references/opencode-prompt-template.md`
