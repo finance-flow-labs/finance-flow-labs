@@ -46,6 +46,15 @@ Environment variables:
   - `write_macro_series_points(points)`
   - `read_macro_series_points(metric_key, limit)`
 
+## Macro Analysis Persistence (v1)
+
+- LLM/agent 기반 매크로 분석 결과 저장 테이블: `macro_analysis_results`
+- 마이그레이션: `migrations/005_macro_analysis_results.sql`
+- Repository API:
+  - `write_macro_analysis_result(result)`
+  - `read_latest_macro_analysis(limit)`
+- 저장 필드에는 `regime`, `confidence`, `base/bull/bear`, `reason_codes`, `risk_flags`, `triggers`, `narrative`, `model` 포함
+
 ## Operator Dashboard
 
 - Run: `streamlit run src/dashboard/app.py`
