@@ -26,6 +26,15 @@ def build_parser() -> argparse.ArgumentParser:
     _ = run_update.add_argument("--source", required=True)
     _ = run_update.add_argument("--entity")
 
+    run_macro_analysis = subparsers.add_parser("run-macro-analysis")
+    _ = run_macro_analysis.add_argument(
+        "--metric-key",
+        action="append",
+        default=[],
+    )
+    _ = run_macro_analysis.add_argument("--as-of")
+    _ = run_macro_analysis.add_argument("--limit", type=int, default=120)
+
     return parser
 
 
@@ -104,12 +113,54 @@ def run_update_command(source: str, entity: Optional[str] = None) -> dict[str, o
     return summary
 
 
+def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
+    if value is None:
+        return None
+
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def run_macro_analysis_command(
+    metric_keys: Optional[list[str]] = None,
+    as_of: Optional[str] = None,
+    limit: int = 120,
+) -> dict[str, object]:
+    flow_runner = importlib.import_module("src.research.flow_runner")
+    run_macro_analysis_flow = flow_runner.run_macro_analysis_flow
+
+    dsn = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
+    if not dsn:
+        raise ValueError("SUPABASE_DB_URL or DATABASE_URL is required")
+
+    repository = PostgresRepository(dsn=dsn)
+    parsed_as_of = _parse_iso_datetime(as_of)
+
+    return run_macro_analysis_flow(
+        repository=repository,
+        metric_keys=metric_keys,
+        as_of=parsed_as_of,
+        limit=limit,
+    )
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
     if args.command == "run-update":
         summary = run_update_command(args.source, args.entity)
+        print(json.dumps(summary))
+        return 0
+
+    if args.command == "run-macro-analysis":
+        summary = run_macro_analysis_command(
+            metric_keys=list(args.metric_key),
+            as_of=args.as_of,
+            limit=args.limit,
+        )
         print(json.dumps(summary))
         return 0
 

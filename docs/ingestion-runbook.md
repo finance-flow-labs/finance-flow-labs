@@ -55,6 +55,24 @@ Environment variables:
   - `read_latest_macro_analysis(limit)`
 - 저장 필드에는 `regime`, `confidence`, `base/bull/bear`, `reason_codes`, `risk_flags`, `triggers`, `narrative`, `model` 포함
 
+## Macro Analysis Runner (multi-agent + fallback)
+
+- 사전 조건:
+  - `migrations/004_macro_series_points.sql` 및 `migrations/005_macro_analysis_results.sql` 적용
+- CLI 실행:
+  - `python3 -m src.ingestion.cli run-macro-analysis`
+  - 특정 지표 지정: `python3 -m src.ingestion.cli run-macro-analysis --metric-key CPIAUCSL --metric-key KOR_BASE_RATE`
+  - 시점/윈도우 지정: `python3 -m src.ingestion.cli run-macro-analysis --as-of 2026-02-18T00:00:00+00:00 --limit 120`
+- 내부 단계:
+  1. Quant signal 산출 (`macro_series_points` 조회)
+  2. Strategist view 생성
+  3. Risk view 생성
+  4. Synthesis 후 `macro_analysis_results` 저장
+- LLM fallback 정책:
+  - `OPENAI_API_KEY`(및 provider 설정)가 있으면 LLM 응답 사용
+  - 키/설정이 없거나 호출 실패 시 deterministic 템플릿으로 완전한 결과 생성
+  - fallback 모드에서도 `regime/confidence/base/bull/bear/reason_codes/risk_flags/triggers/narrative/model` 모두 저장
+
 ## Operator Dashboard
 
 - Run: `streamlit run src/dashboard/app.py`
