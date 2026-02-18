@@ -1,36 +1,36 @@
-# OpenCode Prompt Template (Macro Analysis)
+# OpenCode 프롬프트 템플릿 (매크로 분석)
 
-Use this template when OpenCode drifts into planning loops.
+OpenCode가 플래닝 루프에 빠질 때 아래 템플릿을 사용한다.
 
 ```text
-Implement directly now. Do not use task() or subagents. Do not enter planning mode.
+바로 구현해라. task() 또는 서브에이전트를 사용하지 마라. planning 모드로 들어가지 마라.
 
-Target branch: <branch-name>
-Scope: <single feature slice>
+대상 브랜치: <branch-name>
+범위: <single feature slice>
 
-Requirements:
+요구사항:
 1) <file-level changes>
 2) <tests to add/update>
 3) <docs to update>
 
-Constraints:
-- Use model openai/gpt-5.3-codex and variant xhigh.
-- Keep app code free of direct OpenAI HTTP calls.
-- Keep deterministic fallback path.
+제약:
+- 모델은 openai/gpt-5.3-codex, variant는 xhigh를 사용한다.
+- 앱 코드에 직접 OpenAI HTTP 호출을 넣지 않는다.
+- 결정론적 fallback 경로를 유지한다.
 
-Validation:
-- Run: PYTHONPATH=. pytest -q
-- Commit: <commit-message>
+검증:
+- 실행: PYTHONPATH=. pytest -q
+- 커밋: <commit-message>
 
-Output exactly:
+마지막 출력 형식(정확히):
 SUMMARY
 CHANGED_FILES
 TEST_RESULT
 COMMIT_SHA
 ```
 
-## Recommended CLI Form
+## 권장 CLI 형태
 
 ```bash
-opencode run -m openai/gpt-5.3-codex --variant xhigh "<prompt above>"
+opencode run -m openai/gpt-5.3-codex --variant xhigh "<위 템플릿 프롬프트>"
 ```

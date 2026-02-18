@@ -1,43 +1,43 @@
-# Finance Flow Labs Context
+# Finance Flow Labs 컨텍스트
 
-## Key Files
+## 핵심 파일
 
-- `src/research/macro_analysis.py` - quant signal calculation
-- `src/research/agent_views.py` - deterministic synthesis payload shaping
-- `src/research/opencode_runner.py` - OpenCode CLI execution and response parsing
-- `src/research/flow_runner.py` - quant → views → synthesis → persistence orchestration
-- `src/ingestion/cli.py` - `run-macro-analysis` command wiring
-- `src/ingestion/postgres_repository.py` - persistence read/write methods
+- `src/research/macro_analysis.py` - 퀀트 시그널 계산
+- `src/research/agent_views.py` - 결정론적 합성용 뷰/페이로드 구성
+- `src/research/opencode_runner.py` - OpenCode CLI 실행 및 응답 파싱
+- `src/research/flow_runner.py` - quant → views → synthesis → persistence 오케스트레이션
+- `src/ingestion/cli.py` - `run-macro-analysis` 명령 연결
+- `src/ingestion/postgres_repository.py` - 저장소 읽기/쓰기
 
-## Persistence Tables
+## 저장 테이블
 
 - `macro_series_points`
-  - migration: `migrations/004_macro_series_points.sql`
+  - 마이그레이션: `migrations/004_macro_series_points.sql`
 - `macro_analysis_results`
-  - migration: `migrations/005_macro_analysis_results.sql`
+  - 마이그레이션: `migrations/005_macro_analysis_results.sql`
 
-## Existing Tests to Extend
+## 확장 대상 테스트
 
 - `tests/test_macro_analysis_pipeline.py`
 - `tests/test_macro_analysis_cli.py`
 - `tests/test_macro_analysis_repository.py`
 - `tests/test_cli_smoke.py`
 
-## Verification Commands
+## 검증 명령
 
 ```bash
 PYTHONPATH=. pytest -q
 ```
 
-Optional targeted runs:
+선택적 타깃 실행:
 
 ```bash
 PYTHONPATH=. pytest -q tests/test_macro_analysis_pipeline.py
 PYTHONPATH=. pytest -q tests/test_macro_analysis_cli.py
 ```
 
-## Architecture Constraints
+## 아키텍처 제약
 
-- Keep direct provider HTTP code out of app logic.
-- Treat OpenCode runner as execution boundary for generated analysis text.
-- Keep deterministic fallback fully functional and test-covered.
+- 앱 로직에 직접 provider HTTP 호출 코드를 넣지 않는다.
+- 생성형 분석 텍스트 경계는 OpenCode runner로 유지한다.
+- 결정론적 fallback 경로는 항상 동작하고 테스트로 보장한다.
