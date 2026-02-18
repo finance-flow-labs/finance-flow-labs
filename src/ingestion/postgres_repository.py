@@ -83,6 +83,76 @@ class PostgresRepository:
         cursor.close()
         conn.close()
 
+    def write_macro_analysis_result(self, result: Mapping[str, object]) -> None:
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO macro_analysis_results(
+                run_id,
+                as_of,
+                regime,
+                confidence,
+                base_case,
+                bull_case,
+                bear_case,
+                reason_codes,
+                risk_flags,
+                triggers,
+                narrative,
+                model
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
+            """,
+            (
+                result["run_id"],
+                result["as_of"],
+                result["regime"],
+                result["confidence"],
+                result["base_case"],
+                result["bull_case"],
+                result["bear_case"],
+                json.dumps(result["reason_codes"], default=str),
+                json.dumps(result["risk_flags"], default=str),
+                json.dumps(result["triggers"], default=str),
+                result["narrative"],
+                result.get("model"),
+            ),
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+    def read_latest_macro_analysis(self, limit: int = 20) -> list[dict[str, object]]:
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                run_id,
+                as_of,
+                regime,
+                confidence,
+                base_case,
+                bull_case,
+                bear_case,
+                reason_codes,
+                risk_flags,
+                triggers,
+                narrative,
+                model,
+                created_at
+            FROM macro_analysis_results
+            ORDER BY as_of DESC, created_at DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        rows = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        cursor.close()
+        conn.close()
+        return [dict(zip(columns, row)) for row in rows]
+
     def write_raw(self, row: Mapping[str, object]) -> None:
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()
