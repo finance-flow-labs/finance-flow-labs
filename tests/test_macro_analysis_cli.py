@@ -18,6 +18,8 @@ def test_cli_exposes_run_macro_analysis_command():
             "2026-02-18T00:00:00+00:00",
             "--limit",
             "50",
+            "--analysis-engine",
+            "fallback",
         ]
     )
 
@@ -25,6 +27,7 @@ def test_cli_exposes_run_macro_analysis_command():
     assert args.metric_key == ["CPIAUCSL", "KOR_BASE_RATE"]
     assert args.as_of == "2026-02-18T00:00:00+00:00"
     assert args.limit == 50
+    assert args.analysis_engine == "fallback"
 
 
 def test_run_macro_analysis_command_calls_flow_runner(monkeypatch):
@@ -34,11 +37,12 @@ def test_run_macro_analysis_command_calls_flow_runner(monkeypatch):
         def __init__(self, dsn):
             calls["dsn"] = dsn
 
-    def fake_run_macro_analysis_flow(*, repository, metric_keys, as_of, limit):
+    def fake_run_macro_analysis_flow(*, repository, metric_keys, as_of, limit, analysis_engine):
         calls["repository_type"] = type(repository).__name__
         calls["metric_keys"] = metric_keys
         calls["as_of"] = as_of
         calls["limit"] = limit
+        calls["analysis_engine"] = analysis_engine
         return {"status": "success", "run_id": "run-1"}
 
     monkeypatch.setenv("SUPABASE_DB_URL", "postgresql://example")
@@ -57,6 +61,7 @@ def test_run_macro_analysis_command_calls_flow_runner(monkeypatch):
         metric_keys=["CPIAUCSL"],
         as_of="2026-02-18T00:00:00+00:00",
         limit=77,
+        analysis_engine="fallback",
     )
 
     assert summary["status"] == "success"
@@ -64,17 +69,19 @@ def test_run_macro_analysis_command_calls_flow_runner(monkeypatch):
     assert calls["repository_type"] == "FakeRepository"
     assert calls["metric_keys"] == ["CPIAUCSL"]
     assert calls["limit"] == 77
+    assert calls["analysis_engine"] == "fallback"
 
 
 def test_cli_main_runs_macro_analysis_command(capsys, monkeypatch):
     monkeypatch.setattr(
         cli,
         "run_macro_analysis_command",
-        lambda metric_keys, as_of, limit: {
+        lambda metric_keys, as_of, limit, analysis_engine: {
             "status": "success",
             "metric_keys": metric_keys,
             "as_of": as_of,
             "limit": limit,
+            "engine": analysis_engine,
         },
     )
 
@@ -92,3 +99,4 @@ def test_cli_main_runs_macro_analysis_command(capsys, monkeypatch):
     assert exit_code == 0
     assert '"status": "success"' in captured.out
     assert '"limit": 21' in captured.out
+    assert '"engine": "opencode"' in captured.out

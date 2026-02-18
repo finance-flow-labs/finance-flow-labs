@@ -1,102 +1,26 @@
-import json
-import os
-import urllib.error
-import urllib.request
-from collections.abc import Mapping, Sequence
-from typing import Optional, Protocol
+from collections.abc import Mapping
 
 
-class LlmProviderProtocol(Protocol):
-    model_name: str
-
-    def complete(self, *, system_prompt: str, user_prompt: str) -> str: ...
-
-
-class OpenAiChatProvider:
-    def __init__(
-        self,
-        api_key: str,
-        model_name: str = "gpt-5.3-codex",
-        timeout_seconds: int = 20,
-    ) -> None:
-        self.api_key = api_key
-        self.model_name = model_name
-        self.timeout_seconds = timeout_seconds
-
-    def complete(self, *, system_prompt: str, user_prompt: str) -> str:
-        payload = {
-            "model": self.model_name,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "temperature": 0.2,
-        }
-
-        request = urllib.request.Request(
-            url="https://api.openai.com/v1/chat/completions",
-            method="POST",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            data=json.dumps(payload).encode("utf-8"),
-        )
-
-        with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-            body = response.read().decode("utf-8")
-
-        data = json.loads(body)
-        choices = data.get("choices")
-        if not isinstance(choices, list) or not choices:
-            return ""
-
-        first = choices[0]
-        if not isinstance(first, Mapping):
-            return ""
-
-        message = first.get("message")
-        if not isinstance(message, Mapping):
-            return ""
-
-        content = message.get("content")
-        if isinstance(content, str):
-            return content.strip()
-        return ""
+def _coerce_str_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if isinstance(item, str)]
 
 
-def build_provider_from_env() -> Optional[LlmProviderProtocol]:
-    provider = os.getenv("MACRO_LLM_PROVIDER", "openai").strip().lower()
-    if provider not in {"", "openai"}:
-        return None
-
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        return None
-
-    model_name = os.getenv("OPENAI_MODEL", "gpt-5.3-codex").strip() or "gpt-5.3-codex"
-    timeout_raw = os.getenv("OPENAI_TIMEOUT_SECONDS", "20").strip()
-    timeout_seconds = int(timeout_raw) if timeout_raw.isdigit() else 20
-    return OpenAiChatProvider(api_key=api_key, model_name=model_name, timeout_seconds=timeout_seconds)
-
-
-def _render_with_provider(
-    provider: Optional[LlmProviderProtocol],
-    *,
-    system_prompt: str,
-    user_prompt: str,
-    fallback: str,
-) -> str:
-    if provider is None:
-        return fallback
-
-    try:
-        content = provider.complete(system_prompt=system_prompt, user_prompt=user_prompt)
-        if content:
-            return content
-        return fallback
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError):
-        return fallback
+def _coerce_float(value: object, default: float = 0.0) -> float:
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return default
+        try:
+            return float(stripped)
+        except ValueError:
+            return default
+    return default
 
 
 def _fallback_base_case(regime: str) -> str:
@@ -125,42 +49,29 @@ def _fallback_bear_case(regime: str) -> str:
 
 def build_strategist_view(
     quant_summary: Mapping[str, object],
-    provider: Optional[LlmProviderProtocol] = None,
 ) -> dict[str, object]:
     regime = str(quant_summary.get("regime", "neutral"))
-    reason_codes = [str(item) for item in quant_summary.get("reason_codes", []) if isinstance(item, str)]
+    reason_codes = _coerce_str_list(quant_summary.get("reason_codes", []))
 
     fallback_summary = (
         f"Strategist view: regime={regime}; key signals={', '.join(reason_codes[:3]) or 'insufficient_signals'}."
     )
 
-    prompt = (
-        "Summarize macro strategist view in one concise paragraph based on this regime payload: "
-        f"{json.dumps(dict(quant_summary), default=str)}"
-    )
-    summary = _render_with_provider(
-        provider,
-        system_prompt="You are a macro strategist. Keep outputs concise and evidence-aware.",
-        user_prompt=prompt,
-        fallback=fallback_summary,
-    )
-
     return {
         "agent": "strategist",
-        "summary": summary,
+        "summary": fallback_summary,
         "base_case": _fallback_base_case(regime),
         "bull_case": _fallback_bull_case(regime),
         "bear_case": _fallback_bear_case(regime),
         "reason_codes": reason_codes,
-        "triggers": [str(item) for item in quant_summary.get("triggers", []) if isinstance(item, str)],
+        "triggers": _coerce_str_list(quant_summary.get("triggers", [])),
     }
 
 
 def build_risk_view(
     quant_summary: Mapping[str, object],
-    provider: Optional[LlmProviderProtocol] = None,
 ) -> dict[str, object]:
-    risk_flags = [str(item) for item in quant_summary.get("risk_flags", []) if isinstance(item, str)]
+    risk_flags = _coerce_str_list(quant_summary.get("risk_flags", []))
     fallback_summary = (
         "Risk view: "
         + (
@@ -170,24 +81,13 @@ def build_risk_view(
         )
     )
 
-    prompt = (
-        "Summarize macro downside risks and invalidation conditions in one concise paragraph: "
-        f"{json.dumps(dict(quant_summary), default=str)}"
-    )
-    summary = _render_with_provider(
-        provider,
-        system_prompt="You are a macro risk analyst focused on downside scenarios and invalidation triggers.",
-        user_prompt=prompt,
-        fallback=fallback_summary,
-    )
-
-    triggers = [str(item) for item in quant_summary.get("triggers", []) if isinstance(item, str)]
+    triggers = _coerce_str_list(quant_summary.get("triggers", []))
     if not triggers:
         triggers = ["next_macro_release"]
 
     return {
         "agent": "risk",
-        "summary": summary,
+        "summary": fallback_summary,
         "risk_flags": risk_flags,
         "triggers": triggers,
     }
@@ -210,8 +110,8 @@ def synthesize_macro_analysis(
         {
             str(item)
             for item in [
-                *[str(v) for v in quant_summary.get("reason_codes", [])],
-                *[str(v) for v in strategist_view.get("reason_codes", [])],
+                *[str(v) for v in _coerce_str_list(quant_summary.get("reason_codes", []))],
+                *[str(v) for v in _coerce_str_list(strategist_view.get("reason_codes", []))],
             ]
             if item
         }
@@ -220,8 +120,8 @@ def synthesize_macro_analysis(
         {
             str(item)
             for item in [
-                *[str(v) for v in quant_summary.get("risk_flags", [])],
-                *[str(v) for v in risk_view.get("risk_flags", [])],
+                *[str(v) for v in _coerce_str_list(quant_summary.get("risk_flags", []))],
+                *[str(v) for v in _coerce_str_list(risk_view.get("risk_flags", []))],
             ]
             if item
         }
@@ -230,9 +130,9 @@ def synthesize_macro_analysis(
         {
             str(item)
             for item in [
-                *[str(v) for v in quant_summary.get("triggers", [])],
-                *[str(v) for v in strategist_view.get("triggers", [])],
-                *[str(v) for v in risk_view.get("triggers", [])],
+                *[str(v) for v in _coerce_str_list(quant_summary.get("triggers", []))],
+                *[str(v) for v in _coerce_str_list(strategist_view.get("triggers", []))],
+                *[str(v) for v in _coerce_str_list(risk_view.get("triggers", []))],
             ]
             if item
         }
@@ -240,7 +140,7 @@ def synthesize_macro_analysis(
 
     return {
         "regime": regime,
-        "confidence": float(quant_summary.get("confidence", 0.0)),
+        "confidence": _coerce_float(quant_summary.get("confidence", 0.0), default=0.0),
         "base_case": str(strategist_view.get("base_case", _fallback_base_case(regime))),
         "bull_case": str(strategist_view.get("bull_case", _fallback_bull_case(regime))),
         "bear_case": str(strategist_view.get("bear_case", _fallback_bear_case(regime))),

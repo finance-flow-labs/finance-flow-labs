@@ -5,13 +5,12 @@ from typing import Optional, Protocol
 from uuid import uuid4
 
 from .agent_views import (
-    LlmProviderProtocol,
-    build_provider_from_env,
     build_risk_view,
     build_strategist_view,
     synthesize_macro_analysis,
 )
 from .macro_analysis import analyze_quant_regime, prepare_metric_series
+from . import opencode_runner
 
 
 class MacroAnalysisRepositoryProtocol(Protocol):
@@ -45,12 +44,49 @@ def _normalize_as_of(as_of: Optional[datetime]) -> datetime:
     return effective
 
 
+def _resolve_analysis_engine(analysis_engine: str) -> str:
+    normalized = analysis_engine.strip().lower()
+    if normalized in {"opencode", "fallback"}:
+        return normalized
+    raise ValueError("analysis_engine must be one of: opencode, fallback")
+
+
+def _resolve_model_name(
+    strategist_result: Mapping[str, object],
+    risk_result: Mapping[str, object],
+) -> str:
+    strategist_model = strategist_result.get("model")
+    risk_model = risk_result.get("model")
+
+    strategist_name = strategist_model.strip() if isinstance(strategist_model, str) else ""
+    risk_name = risk_model.strip() if isinstance(risk_model, str) else ""
+
+    if strategist_name and strategist_name == risk_name:
+        return strategist_name
+    if strategist_name:
+        return strategist_name
+    if risk_name:
+        return risk_name
+    return "deterministic-fallback"
+
+
+def _extract_view(
+    result: Mapping[str, object],
+    *,
+    fallback: dict[str, object],
+) -> dict[str, object]:
+    view = result.get("view")
+    if isinstance(view, Mapping):
+        return dict(view)
+    return fallback
+
+
 def run_macro_analysis_flow(
     repository: MacroAnalysisRepositoryProtocol,
     metric_keys: Optional[Sequence[str]] = None,
     as_of: Optional[datetime] = None,
     limit: int = 120,
-    provider: Optional[LlmProviderProtocol] = None,
+    analysis_engine: str = "opencode",
     run_id: Optional[str] = None,
 ) -> dict[str, object]:
     resolved_metric_keys = _resolve_metric_keys(metric_keys)
@@ -65,21 +101,41 @@ def run_macro_analysis_flow(
 
     quant_summary = analyze_quant_regime(series_by_metric)
 
-    effective_provider = provider or build_provider_from_env()
-    strategist_view = build_strategist_view(quant_summary, provider=effective_provider)
-    risk_view = build_risk_view(quant_summary, provider=effective_provider)
+    requested_engine = _resolve_analysis_engine(analysis_engine)
+    if requested_engine == "opencode":
+        strategist_result = opencode_runner.generate_strategist_view(quant_summary)
+        risk_result = opencode_runner.generate_risk_view(quant_summary)
+        strategist_view = _extract_view(
+            strategist_result,
+            fallback=build_strategist_view(quant_summary),
+        )
+        risk_view = _extract_view(
+            risk_result,
+            fallback=build_risk_view(quant_summary),
+        )
+
+        strategist_engine = strategist_result.get("engine")
+        risk_engine = risk_result.get("engine")
+        if strategist_engine == "opencode" and risk_engine == "opencode":
+            effective_engine = "opencode"
+            model_name = _resolve_model_name(strategist_result, risk_result)
+        else:
+            effective_engine = "fallback"
+            model_name = "deterministic-fallback"
+    else:
+        strategist_view = build_strategist_view(quant_summary)
+        risk_view = build_risk_view(quant_summary)
+        effective_engine = "fallback"
+        model_name = "deterministic-fallback"
+
     synthesis = synthesize_macro_analysis(quant_summary, strategist_view, risk_view)
 
     resolved_run_id = run_id or str(uuid4())
-    model_name = (
-        effective_provider.model_name
-        if effective_provider is not None
-        else "deterministic-fallback"
-    )
 
     persist_payload: dict[str, object] = {
         "run_id": resolved_run_id,
         "as_of": effective_as_of.isoformat(),
+        "engine": effective_engine,
         "model": model_name,
         **synthesis,
     }
@@ -92,6 +148,7 @@ def run_macro_analysis_flow(
         "as_of": effective_as_of.isoformat(),
         "regime": synthesis["regime"],
         "confidence": synthesis["confidence"],
+        "engine": effective_engine,
         "model": model_name,
         "metric_keys": resolved_metric_keys,
         "metrics_with_data": sorted(series_by_metric.keys()),

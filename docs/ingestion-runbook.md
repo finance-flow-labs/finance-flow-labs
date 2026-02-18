@@ -63,14 +63,17 @@ Environment variables:
   - `python3 -m src.ingestion.cli run-macro-analysis`
   - 특정 지표 지정: `python3 -m src.ingestion.cli run-macro-analysis --metric-key CPIAUCSL --metric-key KOR_BASE_RATE`
   - 시점/윈도우 지정: `python3 -m src.ingestion.cli run-macro-analysis --as-of 2026-02-18T00:00:00+00:00 --limit 120`
+  - deterministic 강제 모드: `python3 -m src.ingestion.cli run-macro-analysis --analysis-engine fallback`
 - 내부 단계:
   1. Quant signal 산출 (`macro_series_points` 조회)
-  2. Strategist view 생성
-  3. Risk view 생성
+  2. Strategist view 생성 (OpenCode CLI 또는 deterministic fallback)
+  3. Risk view 생성 (OpenCode CLI 또는 deterministic fallback)
   4. Synthesis 후 `macro_analysis_results` 저장
 - LLM fallback 정책:
-  - `OPENAI_API_KEY`(및 provider 설정)가 있으면 LLM 응답 사용
-  - 키/설정이 없거나 호출 실패 시 deterministic 템플릿으로 완전한 결과 생성
+  - 기본 엔진은 `opencode`이며 OpenCode CLI를 호출해 strategist/risk JSON 응답을 생성
+  - CLI 응답이 timeout/파싱 실패/비정상 종료면 deterministic 템플릿으로 자동 fallback
+  - 강제 fallback 모드는 `--analysis-engine fallback`
+  - 요약 출력에 `engine`/`model`이 포함되며, fallback 시 model은 `deterministic-fallback`
   - fallback 모드에서도 `regime/confidence/base/bull/bear/reason_codes/risk_flags/triggers/narrative/model` 모두 저장
 
 ## Operator Dashboard

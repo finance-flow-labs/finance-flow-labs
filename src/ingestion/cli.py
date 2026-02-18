@@ -34,6 +34,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _ = run_macro_analysis.add_argument("--as-of")
     _ = run_macro_analysis.add_argument("--limit", type=int, default=120)
+    _ = run_macro_analysis.add_argument(
+        "--analysis-engine",
+        choices=["opencode", "fallback"],
+        default="opencode",
+    )
 
     return parser
 
@@ -127,6 +132,7 @@ def run_macro_analysis_command(
     metric_keys: Optional[list[str]] = None,
     as_of: Optional[str] = None,
     limit: int = 120,
+    analysis_engine: str = "opencode",
 ) -> dict[str, object]:
     flow_runner = importlib.import_module("src.research.flow_runner")
     run_macro_analysis_flow = flow_runner.run_macro_analysis_flow
@@ -143,6 +149,7 @@ def run_macro_analysis_command(
         metric_keys=metric_keys,
         as_of=parsed_as_of,
         limit=limit,
+        analysis_engine=analysis_engine,
     )
 
 
@@ -160,6 +167,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             metric_keys=list(args.metric_key),
             as_of=args.as_of,
             limit=args.limit,
+            analysis_engine=args.analysis_engine,
         )
         print(json.dumps(summary))
         return 0

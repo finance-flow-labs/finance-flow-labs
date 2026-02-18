@@ -49,12 +49,13 @@ def test_macro_analysis_flow_fallback_persists_complete_payload():
         metric_keys=["CPIAUCSL", "KOR_BASE_RATE"],
         as_of=datetime(2026, 2, 18, tzinfo=timezone.utc),
         limit=120,
-        provider=None,
+        analysis_engine="fallback",
         run_id="run-fixed",
     )
 
     assert summary["status"] == "success"
     assert summary["run_id"] == "run-fixed"
+    assert summary["engine"] == "fallback"
     assert summary["model"] == "deterministic-fallback"
     assert len(repo.saved_results) == 1
 
@@ -71,10 +72,12 @@ def test_macro_analysis_flow_fallback_persists_complete_payload():
         "risk_flags",
         "triggers",
         "narrative",
+        "engine",
         "model",
     }
     assert required_keys.issubset(payload.keys())
     assert payload["run_id"] == "run-fixed"
+    assert payload["engine"] == "fallback"
     assert payload["model"] == "deterministic-fallback"
     assert isinstance(payload["reason_codes"], list)
     assert isinstance(payload["risk_flags"], list)
@@ -104,7 +107,7 @@ def test_macro_analysis_flow_is_deterministic_for_same_input():
         metric_keys=["CPIAUCSL"],
         as_of=as_of,
         limit=120,
-        provider=None,
+        analysis_engine="fallback",
         run_id="run-det",
     )
     flow_runner.run_macro_analysis_flow(
@@ -112,7 +115,7 @@ def test_macro_analysis_flow_is_deterministic_for_same_input():
         metric_keys=["CPIAUCSL"],
         as_of=as_of,
         limit=120,
-        provider=None,
+        analysis_engine="fallback",
         run_id="run-det",
     )
 
@@ -131,8 +134,71 @@ def test_macro_analysis_flow_is_deterministic_for_same_input():
         "risk_flags",
         "triggers",
         "narrative",
+        "engine",
         "model",
     ]
 
     for key in stable_keys:
         assert payload_a[key] == payload_b[key]
+
+
+def test_macro_analysis_flow_opencode_uses_agent_runner(monkeypatch):
+    repo = FakeRepository(
+        {
+            "CPIAUCSL": [
+                {
+                    "as_of": datetime(2026, 1, 1, tzinfo=timezone.utc),
+                    "value": 3.2,
+                },
+                {
+                    "as_of": datetime(2026, 2, 1, tzinfo=timezone.utc),
+                    "value": 3.0,
+                },
+            ]
+        }
+    )
+
+    monkeypatch.setattr(
+        flow_runner.opencode_runner,
+        "generate_strategist_view",
+        lambda quant_summary: {
+            "engine": "opencode",
+            "model": "gpt-5.3-codex",
+            "view": {
+                "agent": "strategist",
+                "summary": "Strategist summary",
+                "base_case": "Base case",
+                "bull_case": "Bull case",
+                "bear_case": "Bear case",
+                "reason_codes": ["CPIAUCSL:down"],
+                "triggers": ["next_release:CPIAUCSL"],
+            },
+        },
+    )
+    monkeypatch.setattr(
+        flow_runner.opencode_runner,
+        "generate_risk_view",
+        lambda quant_summary: {
+            "engine": "opencode",
+            "model": "gpt-5.3-codex",
+            "view": {
+                "agent": "risk",
+                "summary": "Risk summary",
+                "risk_flags": ["event_risk"],
+                "triggers": ["next_release:CPIAUCSL"],
+            },
+        },
+    )
+
+    summary = flow_runner.run_macro_analysis_flow(
+        repository=repo,
+        metric_keys=["CPIAUCSL"],
+        as_of=datetime(2026, 2, 18, tzinfo=timezone.utc),
+        limit=120,
+        analysis_engine="opencode",
+        run_id="run-opencode",
+    )
+
+    assert summary["engine"] == "opencode"
+    assert summary["model"] == "gpt-5.3-codex"
+    assert repo.saved_results[0]["narrative"] == "Strategist summary Risk summary"

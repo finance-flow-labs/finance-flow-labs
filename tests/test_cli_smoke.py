@@ -18,3 +18,4 @@ def test_cli_exposes_macro_analysis_command():
 
     assert args.command == "run-macro-analysis"
     assert args.metric_key == ["CPIAUCSL"]
+    assert args.analysis_engine == "opencode"
