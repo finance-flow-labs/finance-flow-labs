@@ -15,8 +15,25 @@ description: OpenCode 에이전트 실행(Codex xhigh)으로 finance-flow-labs�
 
 - 구현 실행은 OpenCode를 사용한다.
 - OpenCode 실행 모델은 Codex xhigh를 사용한다.
+- 구현 시작 전에 아래 "슈퍼파워 필수 스킬 세트"를 프롬프트에 명시한다.
 - 앱 코드에 OpenAI 직접 호출(`urllib`/`requests`로 OpenAI 엔드포인트 호출)을 추가하지 않는다.
 - 기능 단위로 PR을 분리하고, 완료 시 PR URL을 공유한다.
+
+## REQUIRED 슈퍼파워 스킬 세트
+
+구현성 작업(코드/테스트/문서 수정)에서는 아래 5개 스킬을 REQUIRED 세트로 명시적으로 포함한다.
+
+- `superpowers/using-superpowers`: 스킬 적용 규칙과 우선순위 강제
+- `superpowers/writing-plans`: 작업 분해와 계획 품질 기준 적용
+- `superpowers/test-driven-development`: 테스트 우선(RED-GREEN-REFACTOR) 강제
+- `superpowers/verification-before-completion`: 완료 주장 전 검증 증거 강제
+- `superpowers/requesting-code-review`: 변경 완료 후 코드리뷰 요청 절차 강제
+
+누락 시 구현을 시작하지 않는다.
+
+프롬프트 본문에는 아래 문구를 그대로 넣는다.
+
+`REQUIRED 슈퍼파워 스킬 세트: superpowers/using-superpowers, superpowers/writing-plans, superpowers/test-driven-development, superpowers/verification-before-completion, superpowers/requesting-code-review`
 
 ## 빠른 시작
 
@@ -25,6 +42,12 @@ description: OpenCode 에이전트 실행(Codex xhigh)으로 finance-flow-labs�
 3. 기능 범위를 한 덩어리(단일 슬라이스)로 고정한다.
 4. 검증을 실행한다(`PYTHONPATH=. pytest -q` + 필요한 스모크 테스트).
 5. 커밋 후 PR을 연다.
+
+### OpenCode 명령 예시(슈퍼파워 사용 가이드 포함)
+
+```bash
+opencode run -m openai/gpt-5.3-codex --variant xhigh "REQUIRED 슈퍼파워 스킬 세트: superpowers/using-superpowers, superpowers/writing-plans, superpowers/test-driven-development, superpowers/verification-before-completion, superpowers/requesting-code-review. 각 스킬을 먼저 호출한 뒤 구현을 시작해라. 슈퍼파워 스킬 누락 시 구현을 시작하지 마라. task()/subagent 없이 구현하고, 앱 코드에 OpenAI 직접 HTTP 호출은 추가하지 마라."
+```
 
 ## 구현 워크플로
 
