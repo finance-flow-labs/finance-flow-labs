@@ -36,6 +36,16 @@ Environment variables:
 - `DART_API_KEY` or `DART_CRTFC_KEY` and optional `DART_CORP_CODE` for DART source
 - `ECOS_API_KEY` and optional `ECOS_STAT_CODE` for ECOS source
 
+## Normalization (v1)
+
+- 목적: 소스별 raw payload(FRED/ECOS)를 분석 공통 포맷으로 정규화
+- 정규화 포인트 스키마:
+  - `source`, `entity_id`, `metric_key`, `as_of`, `available_at`, `value`, `lineage_id`
+- 저장 테이블: `macro_series_points` (`migrations/004_macro_series_points.sql`)
+- Repository API:
+  - `write_macro_series_points(points)`
+  - `read_macro_series_points(metric_key, limit)`
+
 ## Operator Dashboard
 
 - Run: `streamlit run src/dashboard/app.py`

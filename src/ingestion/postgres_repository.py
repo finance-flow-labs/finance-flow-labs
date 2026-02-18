@@ -6,6 +6,8 @@ from typing import Optional, Protocol, cast
 
 import psycopg2
 
+from src.research.contracts import NormalizedSeriesPoint
+
 
 class CursorProtocol(Protocol):
     description: list[tuple[str]]
@@ -218,6 +220,65 @@ class PostgresRepository:
             "canonical_events": to_int(canonical_row[0]),
             "quarantine_events": to_int(quarantine_row[0]),
         }
+
+    def write_macro_series_points(self, points: list[NormalizedSeriesPoint]) -> int:
+        if not points:
+            return 0
+
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+
+        for point in points:
+            cursor.execute(
+                """
+                INSERT INTO macro_series_points(
+                    source,
+                    entity_id,
+                    metric_key,
+                    as_of,
+                    available_at,
+                    value,
+                    lineage_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    point.source,
+                    point.entity_id,
+                    point.metric_key,
+                    point.as_of,
+                    point.available_at,
+                    point.value,
+                    point.lineage_id,
+                ),
+            )
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return len(points)
+
+    def read_macro_series_points(
+        self,
+        metric_key: str,
+        limit: int = 100,
+    ) -> list[dict[str, object]]:
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        cursor.execute(
+            """
+            SELECT source, entity_id, metric_key, as_of, available_at, value, lineage_id
+            FROM macro_series_points
+            WHERE metric_key = %s
+            ORDER BY as_of DESC
+            LIMIT %s
+            """,
+            (metric_key, limit),
+        )
+        rows = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        cursor.close()
+        conn.close()
+        return [dict(zip(columns, row)) for row in rows]
 
     def snapshot_counts(self) -> dict[str, int]:
         return self.read_status_counters()
