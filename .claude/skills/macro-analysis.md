@@ -1,7 +1,6 @@
 ---
 name: macro-analysis
-description: 거시경제 멀티에이전트 토론 분석. Bull·Bear·Policy·Critic 서브에이전트 병렬 실행 후 수렴.
-  사용 시: 금리·환율·경기·인플레이션 등 거시경제 주제를 입력하면 4개 전문 에이전트가 토론하고 수렴 인사이트를 제공합니다.
+description: 거시경제 멀티에이전트 토론 분석. Bull, Bear, Policy, Critic 서브에이전트 병렬 실행 후 수렴 인사이트 제공.
 ---
 
 ## 거시경제 멀티에이전트 분석 실행 순서
