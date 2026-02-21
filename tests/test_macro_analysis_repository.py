@@ -51,6 +51,8 @@ def test_postgres_repository_writes_macro_analysis_result():
             "base_case": "growth slows with sticky inflation",
             "bull_case": "soft landing",
             "bear_case": "policy mistake",
+            "policy_case": "policy hold then cuts",
+            "critic_case": "both sides underweight liquidity",
             "reason_codes": ["cpi_cooling", "rate_plateau"],
             "risk_flags": ["data_gap"],
             "triggers": ["next_cpi", "fomc_minutes"],
@@ -60,8 +62,38 @@ def test_postgres_repository_writes_macro_analysis_result():
     )
 
     assert "INSERT INTO macro_analysis_results" in cursor.executed[0][0]
+    assert "policy_case" in cursor.executed[0][0]
+    assert "critic_case" in cursor.executed[0][0]
     assert cursor.executed[0][1][0] == "run-1"
+    assert cursor.executed[0][1][7] == "policy hold then cuts"
+    assert cursor.executed[0][1][8] == "both sides underweight liquidity"
     assert conn.committed is True
+
+
+def test_postgres_repository_writes_macro_analysis_result_with_optional_fields_default():
+    cursor = FakeCursor()
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    repo.write_macro_analysis_result(
+        {
+            "run_id": "run-1",
+            "as_of": "2026-02-18T00:00:00+00:00",
+            "regime": "neutral",
+            "confidence": 0.62,
+            "base_case": "growth slows with sticky inflation",
+            "bull_case": "soft landing",
+            "bear_case": "policy mistake",
+            "reason_codes": ["cpi_cooling", "rate_plateau"],
+            "risk_flags": ["data_gap"],
+            "triggers": ["next_cpi", "fomc_minutes"],
+            "narrative": "Macro conditions are mixed with a slight slowdown bias.",
+            "model": "gpt-5.3-codex",
+        }
+    )
+
+    assert cursor.executed[0][1][7] == ""
+    assert cursor.executed[0][1][8] == ""
 
 
 def test_postgres_repository_reads_latest_macro_analysis():
@@ -75,6 +107,8 @@ def test_postgres_repository_reads_latest_macro_analysis():
                 "growth slows",
                 "soft landing",
                 "hard landing",
+                "policy hold then cuts",
+                "both sides underweight liquidity",
                 ["cpi_cooling"],
                 ["data_gap"],
                 ["next_cpi"],
@@ -91,6 +125,8 @@ def test_postgres_repository_reads_latest_macro_analysis():
             "base_case",
             "bull_case",
             "bear_case",
+            "policy_case",
+            "critic_case",
             "reason_codes",
             "risk_flags",
             "triggers",
@@ -107,3 +143,5 @@ def test_postgres_repository_reads_latest_macro_analysis():
     assert "FROM macro_analysis_results" in cursor.executed[0][0]
     assert rows[0]["run_id"] == "run-1"
     assert rows[0]["regime"] == "neutral"
+    assert rows[0]["policy_case"] == "policy hold then cuts"
+    assert rows[0]["critic_case"] == "both sides underweight liquidity"

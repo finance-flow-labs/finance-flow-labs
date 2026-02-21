@@ -53,7 +53,7 @@ Environment variables:
 - Repository API:
   - `write_macro_analysis_result(result)`
   - `read_latest_macro_analysis(limit)`
-- 저장 필드에는 `regime`, `confidence`, `base/bull/bear`, `reason_codes`, `risk_flags`, `triggers`, `narrative`, `model` 포함
+- 저장 필드에는 `regime`, `confidence`, `base/bull/bear`, `policy_case`, `critic_case`, `reason_codes`, `risk_flags`, `triggers`, `narrative`, `model` 포함
 
 ## Operator Dashboard
 

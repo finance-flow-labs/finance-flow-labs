@@ -96,12 +96,14 @@ class PostgresRepository:
                 base_case,
                 bull_case,
                 bear_case,
+                policy_case,
+                critic_case,
                 reason_codes,
                 risk_flags,
                 triggers,
                 narrative,
                 model
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
             """,
             (
                 result["run_id"],
@@ -111,6 +113,8 @@ class PostgresRepository:
                 result["base_case"],
                 result["bull_case"],
                 result["bear_case"],
+                result.get("policy_case", ""),
+                result.get("critic_case", ""),
                 json.dumps(result["reason_codes"], default=str),
                 json.dumps(result["risk_flags"], default=str),
                 json.dumps(result["triggers"], default=str),
@@ -135,6 +139,8 @@ class PostgresRepository:
                 base_case,
                 bull_case,
                 bear_case,
+                policy_case,
+                critic_case,
                 reason_codes,
                 risk_flags,
                 triggers,

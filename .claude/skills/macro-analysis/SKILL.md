@@ -130,6 +130,56 @@ Critic이 지적한 맹점을 명시적으로 인정하고,
 
 ---
 
+### Step 5: 분석 결과 DB 저장 (선택)
+
+`SUPABASE_DB_URL` 또는 `DATABASE_URL`이 설정된 경우, Step 4 최종 결과를 `macro_analysis_results`에 저장하라.
+
+저장 시 필드 매핑(핵심):
+- `bull_case`: Bull 포지션 원문
+- `bear_case`: Bear 포지션 원문
+- `policy_case`: Policy 포지션 원문
+- `critic_case`: Critic 비판 원문
+- `narrative`: 수렴 인사이트 본문
+
+예시 실행(필요 시):
+```bash
+python3 - <<'PY'
+import os
+from datetime import datetime, timezone
+from uuid import uuid4
+from src.ingestion.postgres_repository import PostgresRepository
+
+dsn = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
+if not dsn:
+    raise SystemExit("DB DSN not set; skip persistence")
+
+repo = PostgresRepository(dsn=dsn)
+repo.write_macro_analysis_result(
+    {
+        "run_id": str(uuid4()),
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "regime": "neutral",
+        "confidence": 0.6,
+        "base_case": "...",
+        "bull_case": "...",
+        "bear_case": "...",
+        "policy_case": "...",
+        "critic_case": "...",
+        "reason_codes": [],
+        "risk_flags": [],
+        "triggers": [],
+        "narrative": "...",
+        "model": "gpt-5.3-codex",
+    }
+)
+print("saved")
+PY
+```
+
+DB가 없거나 저장 중 예외가 발생하면, 저장을 건너뛰고 Step 4 리포트 출력을 계속 진행하라.
+
+---
+
 ## 주의사항
 
 - Step 2의 3개 에이전트는 **반드시 병렬로 실행**하라 (단일 메시지, 여러 Task tool 호출).
