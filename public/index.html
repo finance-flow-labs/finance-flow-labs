@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Finance Flow Labs Operator</title>
+    <style>
+      :root {
+        --bg-a: #f6f9ff;
+        --bg-b: #eaf3ff;
+        --ink: #0f172a;
+        --muted: #475569;
+        --card: #ffffffcc;
+        --border: #dbe4f0;
+        --accent: #0a66c2;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+        color: var(--ink);
+        background: linear-gradient(160deg, var(--bg-a), var(--bg-b));
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .card {
+        width: min(760px, 100%);
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 28px;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      }
+
+      h1 { margin: 0 0 8px; font-size: 1.6rem; }
+      p { margin: 0 0 12px; color: var(--muted); line-height: 1.55; }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      a.button {
+        text-decoration: none;
+        border: 1px solid var(--accent);
+        color: white;
+        background: var(--accent);
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-weight: 600;
+      }
+
+      code {
+        background: #eef4fb;
+        border: 1px solid #d7e4f6;
+        border-radius: 6px;
+        padding: 2px 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Finance Flow Labs Operator Portal</h1>
+      <p>
+        이 Vercel 엔드포인트는 운영 상태 페이지입니다. 데이터 수집 파이프라인은 Supabase에 정상 연동되어 있으며,
+        운영자용 Streamlit 대시보드는 분리 호스팅으로 전환 중입니다.
+      </p>
+      <p>
+        수동 업데이트는 <code>python -m src.ingestion.cli run-update --source sec_edgar</code> 명령으로 실행할 수 있습니다.
+      </p>
+      <div class="row">
+        <a class="button" href="https://github.com/finance-flow-labs/finance-flow-labs/pull/1">PR #1 보기</a>
+      </div>
+    </main>
+  </body>
+</html>

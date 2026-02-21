@@ -20,3 +20,56 @@
 - Gold: no TTL expiration.
 - Silver: 180-day raw cache, 24-month facts.
 - Bronze: 30-90 day cache window.
+
+## Manual Update
+
+- SEC run: `python3 -m src.ingestion.cli run-update --source sec_edgar`
+- FRED run: `python3 -m src.ingestion.cli run-update --source fred`
+- DART run: `python3 -m src.ingestion.cli run-update --source opendart`
+- ECOS run: `python3 -m src.ingestion.cli run-update --source ecos`
+
+Environment variables:
+
+- `SUPABASE_DB_URL` or `DATABASE_URL` for run history persistence
+- `SEC_USER_AGENT` and optional `SEC_CIK` for SEC source
+- `FRED_API_KEY` and optional `FRED_SERIES_ID` for FRED source
+- `DART_API_KEY` or `DART_CRTFC_KEY` and optional `DART_CORP_CODE` for DART source
+- `ECOS_API_KEY` and optional `ECOS_STAT_CODE` for ECOS source
+
+## Normalization (v1)
+
+- 목적: 소스별 raw payload(FRED/ECOS)를 분석 공통 포맷으로 정규화
+- 정규화 포인트 스키마:
+  - `source`, `entity_id`, `metric_key`, `as_of`, `available_at`, `value`, `lineage_id`
+- 저장 테이블: `macro_series_points` (`migrations/004_macro_series_points.sql`)
+- Repository API:
+  - `write_macro_series_points(points)`
+  - `read_macro_series_points(metric_key, limit)`
+
+## Macro Analysis Persistence (v1)
+
+- LLM/agent 기반 매크로 분석 결과 저장 테이블: `macro_analysis_results`
+- 마이그레이션: `migrations/005_macro_analysis_results.sql`
+- Repository API:
+  - `write_macro_analysis_result(result)`
+  - `read_latest_macro_analysis(limit)`
+- 저장 필드에는 `regime`, `confidence`, `base/bull/bear`, `reason_codes`, `risk_flags`, `triggers`, `narrative`, `model` 포함
+
+## Operator Dashboard
+
+- Run: `streamlit run src/dashboard/app.py`
+- Required: `SUPABASE_DB_URL` or `DATABASE_URL`
+- Dashboard shows:
+  - last run status/time
+  - raw/canonical/quarantine counters
+  - recent run history
+
+### Streamlit Community Cloud Deployment
+
+1. Go to `https://share.streamlit.io` and sign in with GitHub.
+2. Click `Create app`.
+3. Select repository: `finance-flow-labs/finance-flow-labs`.
+4. Select branch: `main`.
+5. Set Main file path: `streamlit_app.py`.
+6. Set Secret: `SUPABASE_DB_URL` (or `DATABASE_URL`).
+7. Deploy and copy the generated app URL (`https://<app-name>.streamlit.app`).
