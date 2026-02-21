@@ -55,16 +55,15 @@ class TranscriptClient:
         video_id = extract_video_id(url)
 
         fallback = "en" if language == "ko" else "ko"
+        api = YouTubeTranscriptApi()
         try:
-            transcript_list = YouTubeTranscriptApi.get_transcript(
-                video_id, languages=[language, fallback]
-            )
+            fetched = api.fetch(video_id, languages=[language, fallback])
             used_language = language
         except Exception:
-            transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+            fetched = api.fetch(video_id)
             used_language = "auto"
 
-        transcript_text = " ".join(entry["text"] for entry in transcript_list)
+        transcript_text = " ".join(entry.text for entry in fetched)
 
         return {
             "video_id": video_id,

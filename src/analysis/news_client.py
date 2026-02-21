@@ -5,22 +5,17 @@ from __future__ import annotations
 import feedparser
 
 NEWS_FEEDS: dict[str, str] = {
-    "global_macro": "https://feeds.reuters.com/reuters/businessNews",
-    "us_economy": "https://feeds.reuters.com/reuters/economicNews",
-    "korea_economy": "https://feeds.koreaherald.com/xml/syndication/koreaherald_all.xml",
+    "global_macro": "https://feeds.bbci.co.uk/news/business/rss.xml",
+    "us_economy": "https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml",
+    "korea_economy": "https://www.hankyung.com/feed/economy",
     "fed_policy": "https://www.federalreserve.gov/feeds/press_all.xml",
-    "markets": "https://feeds.reuters.com/reuters/financialNews",
+    "markets": "https://feeds.bbci.co.uk/news/business/economy/rss.xml",
 }
 
 OFFICIAL_FEEDS: dict[str, str] = {
-    "us_treasury": "https://home.treasury.gov/system/files/rss/PressReleases.xml",
     "fed_monetary": "https://www.federalreserve.gov/feeds/press_monetary.xml",
     "fed_speeches": "https://www.federalreserve.gov/feeds/speeches.xml",
-    "imf_news": "https://www.imf.org/en/News/rss",
-    "worldbank": "https://blogs.worldbank.org/rss.xml",
-    "bea_releases": "https://apps.bea.gov/rss/latest_release_rss.xml",
-    "bls_releases": "https://www.bls.gov/feed/bls_latest_numbers.rss",
-    "bok_news": "https://www.bok.or.kr/eng/bbs/E0000634/list.do?menuNo=400069",
+    "ecb_press": "https://www.ecb.europa.eu/rss/press.html",
 }
 
 _ALL_FEEDS = {**NEWS_FEEDS, **OFFICIAL_FEEDS}

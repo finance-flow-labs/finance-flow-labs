@@ -45,44 +45,53 @@ class ChannelClient:
         """
         cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
 
-        videos = scrapetube.get_channel(channel_username=handle)
-
         results: list[dict[str, object]] = []
-        for video in videos:
-            if len(results) >= max_videos:
-                break
-
-            video_id: str = video.get("videoId", "")
-            if not video_id:
-                continue
-
-            # scrapetube returns publishedTimeText (relative) but not epoch;
-            # we attempt to parse the rich data when available.
-            title: str = ""
-            published_at: str = ""
-            try:
-                title = (
-                    video.get("title", {})
-                    .get("runs", [{}])[0]
-                    .get("text", "")
+        try:
+            # channel_username with '@' handles fails on newer YouTube responses;
+            # channel_url is the reliable alternative.
+            if handle.startswith("@"):
+                videos = scrapetube.get_channel(
+                    channel_url=f"https://www.youtube.com/{handle}"
                 )
-                published_at = video.get("publishedTimeText", {}).get("simpleText", "")
-            except Exception:
-                pass
+            else:
+                videos = scrapetube.get_channel(channel_username=handle)
+            for video in videos:
+                if len(results) >= max_videos:
+                    break
 
-            try:
-                transcript_data = self._transcript_client.fetch(video_id, language=language)
-                transcript_text = transcript_data["transcript_text"]
-            except Exception:
-                continue
+                video_id: str = video.get("videoId", "")
+                if not video_id:
+                    continue
 
-            results.append(
-                {
-                    "video_id": video_id,
-                    "title": title,
-                    "published_at": published_at,
-                    "transcript_text": transcript_text,
-                }
-            )
+                # scrapetube returns publishedTimeText (relative) but not epoch;
+                # we attempt to parse the rich data when available.
+                title: str = ""
+                published_at: str = ""
+                try:
+                    title = (
+                        video.get("title", {})
+                        .get("runs", [{}])[0]
+                        .get("text", "")
+                    )
+                    published_at = video.get("publishedTimeText", {}).get("simpleText", "")
+                except Exception:
+                    pass
+
+                try:
+                    transcript_data = self._transcript_client.fetch(video_id, language=language)
+                    transcript_text = transcript_data["transcript_text"]
+                except Exception:
+                    continue
+
+                results.append(
+                    {
+                        "video_id": video_id,
+                        "title": title,
+                        "published_at": published_at,
+                        "transcript_text": transcript_text,
+                    }
+                )
+        except Exception:
+            pass
 
         return results

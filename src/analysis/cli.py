@@ -97,10 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_official = sub.add_parser("official", help="Fetch official institution RSS feed")
     p_official.add_argument(
         "institution",
-        choices=[
-            "us_treasury", "fed_monetary", "fed_speeches", "imf_news",
-            "worldbank", "bea_releases", "bls_releases", "bok_news",
-        ],
+        choices=["fed_monetary", "fed_speeches", "ecb_press"],
     )
     p_official.add_argument("--limit", type=int, default=5)
     p_official.set_defaults(func=cmd_official)
