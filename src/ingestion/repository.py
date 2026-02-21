@@ -16,6 +16,16 @@ class InMemoryRepository:
     def write_quarantine(self, reason: str, payload: Mapping[str, object]) -> None:
         self.quarantine_events.append({"reason": reason, "payload": dict(payload)})
 
+    def read_canonical_facts(
+        self, source: str, metric_name: str, limit: int = 12
+    ) -> list[dict[str, object]]:
+        rows = [
+            row
+            for row in self.canonical_events
+            if row.get("source") == source and row.get("metric_name") == metric_name
+        ]
+        return rows[-limit:]
+
     def snapshot_counts(self) -> dict[str, int]:
         return {
             "raw_events": len(self.raw_events),
