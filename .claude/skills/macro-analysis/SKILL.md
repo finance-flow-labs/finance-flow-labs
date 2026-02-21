@@ -1,12 +1,13 @@
 ---
 name: macro-analysis
-description: 거시경제 멀티에이전트 토론 분석. Bull·Bear·Policy·Critic 서브에이전트 병렬 실행 후 수렴.
-  사용 시: 금리·환율·경기·인플레이션 등 거시경제 주제를 입력하면 4개 전문 에이전트가 토론하고 수렴 인사이트를 제공합니다.
+description: 거시경제 멀티에이전트 토론 분석. Bull, Bear, Policy, Critic 서브에이전트 병렬 실행 후 수렴 인사이트 제공.
 ---
 
 ## 거시경제 멀티에이전트 분석 실행 순서
 
 사용자 쿼리를 분석하여 관련 데이터를 수집한 후, 4개 전문 에이전트가 병렬로 토론하고 수렴합니다.
+
+> **기본 동작**: 쿼리가 없거나 비어 있으면 현재 날짜 기준 전반적인 거시경제 상황 분석을 기본 쿼리로 사용한다.
 
 ---
 
@@ -16,32 +17,41 @@ description: 거시경제 멀티에이전트 토론 분석. Bull·Bear·Policy·
 
 ```bash
 # 뉴스 피드
-python -m src.analysis.cli news global_macro --limit 5
-python -m src.analysis.cli news us_economy --limit 3
-python -m src.analysis.cli news korea_economy --limit 3
+python3 -m src.analysis.cli news global_macro --limit 5
+python3 -m src.analysis.cli news us_economy --limit 3
+python3 -m src.analysis.cli news korea_economy --limit 3
 
 # 공식 기관 발표
-python -m src.analysis.cli official fed_monetary --limit 3
-python -m src.analysis.cli official fed_speeches --limit 3
-python -m src.analysis.cli official us_treasury --limit 3
+python3 -m src.analysis.cli official fed_monetary --limit 3
+python3 -m src.analysis.cli official fed_speeches --limit 3
+python3 -m src.analysis.cli official ecb_press --limit 3
 
-# 주요 시계열 (DB에 데이터가 있는 경우)
-python -m src.analysis.cli series fred FEDFUNDS --limit 12
-python -m src.analysis.cli series fred CPIAUCSL --limit 12
-python -m src.analysis.cli series fred UNRATE --limit 12
-python -m src.analysis.cli series ecos 722Y001 --limit 12
+# 주요 시계열
+# DB(SUPABASE_DB_URL/DATABASE_URL) 없이도 직접 API로 수집 가능:
+#   FRED_API_KEY  — https://fred.stlouisfed.org/docs/api/fred/ (무료)
+#   ECOS_API_KEY  — https://ecos.bok.or.kr (무료)
+# 미설정 시 [] 반환 (정상, 스킵)
+python3 -m src.analysis.cli series fred FEDFUNDS --limit 12
+python3 -m src.analysis.cli series fred CPIAUCSL --limit 12
+python3 -m src.analysis.cli series fred UNRATE --limit 12
+python3 -m src.analysis.cli series ecos 722Y001 --limit 12
 
 # 이상 탐지
-python -m src.analysis.cli anomaly fred CPIAUCSL
-python -m src.analysis.cli anomaly fred FEDFUNDS
+python3 -m src.analysis.cli anomaly fred CPIAUCSL
+python3 -m src.analysis.cli anomaly fred FEDFUNDS
 
 # 박종훈의 지식한방 최근 영상 (항상 실행)
-python -m src.analysis.cli channel @kpunch --days 30 --max-videos 5
+python3 -m src.analysis.cli channel @kpunch --days 30 --max-videos 5
 ```
 
 YouTube URL이 제공된 경우 추가로 실행:
 ```bash
-python -m src.analysis.cli youtube "<URL>"
+python3 -m src.analysis.cli youtube "<URL>"
+```
+
+FOMC 의사록 등 장문 문서를 수집할 경우 `--max-chars 20000` 옵션을 추가하라:
+```bash
+python3 -m src.analysis.cli document "<URL>" --max-chars 20000
 ```
 
 ---
@@ -124,5 +134,5 @@ Critic이 지적한 맹점을 명시적으로 인정하고,
 
 - Step 2의 3개 에이전트는 **반드시 병렬로 실행**하라 (단일 메시지, 여러 Task tool 호출).
 - Step 3의 Critic은 Step 2가 **완료된 후** 순차적으로 실행하라.
-- 수집된 데이터가 없는 시리즈(DB 미연결 등)는 뉴스·공식발표로 대체하라.
+- 수집된 데이터가 없는 시리즈(DB 미연결 등)는 뉴스·공식발표로 대체하라. `series`, `anomaly` 명령어가 오류를 반환하면 자동으로 건너뛰고 계속 진행하라.
 - 각 에이전트 결과 마지막 줄의 POSITION 요약을 수렴 합성에 반드시 반영하라.
