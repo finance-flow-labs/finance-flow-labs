@@ -350,5 +350,40 @@ class PostgresRepository:
         conn.close()
         return [dict(zip(columns, row)) for row in rows]
 
+    def read_canonical_facts(
+        self, source: str, metric_name: str, limit: int = 12
+    ) -> list[dict[str, object]]:
+        """Return up to *limit* rows from canonical_fact_store ordered by as_of asc.
+
+        Used by CanonicalDataClient in the analysis layer.
+        Returns [] when no connection is configured.
+        """
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                source,
+                entity_id,
+                metric_name,
+                metric_value,
+                as_of,
+                available_at,
+                ingested_at,
+                lineage_id
+            FROM canonical_fact_store
+            WHERE source = %s AND metric_name = %s
+            ORDER BY as_of DESC
+            LIMIT %s
+            """,
+            (source, metric_name, limit),
+        )
+        rows = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        cursor.close()
+        conn.close()
+        # Return chronological order (oldest first) for anomaly detection
+        return list(reversed([dict(zip(columns, row)) for row in rows]))
+
     def snapshot_counts(self) -> dict[str, int]:
         return self.read_status_counters()
