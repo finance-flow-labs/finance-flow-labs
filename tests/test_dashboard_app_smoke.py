@@ -96,6 +96,8 @@ def test_dashboard_app_builds_cards_from_view_model():
     assert cards["has_critical_metric_alert"] is False
     assert len(cards["learning_metrics_panel"]) == 3
     assert cards["learning_metrics_panel"][0]["horizon"] == "1W"
+    assert len(cards["policy_compliance_panel"]) >= 10
+    assert cards["policy_compliance_panel"][0]["policy_item"] == "Universe"
     assert cards["learning_metrics_panel"][0]["reliability_badge"] == "🟢 reliable"
     assert (
         cards["learning_metrics_panel"][0]["reliability_reason_text"]
