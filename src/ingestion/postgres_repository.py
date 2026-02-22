@@ -523,6 +523,89 @@ class PostgresRepository:
             cursor.close()
             conn.close()
 
+    def read_forecast_error_attribution_detail(
+        self,
+        attribution_id: int,
+        max_preview_chars: int = 240,
+    ) -> dict[str, object] | None:
+        """Read bounded evidence detail payload for one attribution row."""
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT
+                    fea.id AS attribution_id,
+                    rr.forecast_id,
+                    fr.thesis_id,
+                    fr.as_of,
+                    rr.evaluated_at,
+                    fea.created_at,
+                    fea.evidence_hard,
+                    fea.evidence_soft
+                FROM forecast_error_attributions fea
+                JOIN realization_records rr ON rr.id = fea.realization_id
+                JOIN forecast_records fr ON fr.id = rr.forecast_id
+                WHERE fea.id = %s
+                LIMIT 1
+                """,
+                (attribution_id,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            columns = [desc[0] for desc in cursor.description]
+            payload = dict(zip(columns, row))
+
+            def _preview(value: object) -> str:
+                dumped = json.dumps(value, default=str)
+                if len(dumped) <= max_preview_chars:
+                    return dumped
+                return dumped[:max_preview_chars] + "…(truncated)"
+
+            evidence_hard = payload.get("evidence_hard", [])
+            evidence_soft = payload.get("evidence_soft", [])
+
+            hard_refs: list[dict[str, object]] = []
+            if isinstance(evidence_hard, list):
+                for item in evidence_hard:
+                    if not isinstance(item, Mapping):
+                        continue
+                    hard_refs.append(
+                        {
+                            "source": item.get("source"),
+                            "metric": item.get("metric") or item.get("metric_key"),
+                            "entity_id": item.get("entity_id"),
+                            "raw_event_id": item.get("raw_event_id"),
+                            "canonical_fact_id": item.get("canonical_fact_id"),
+                            "lineage_id": item.get("lineage_id"),
+                            "as_of": item.get("as_of"),
+                            "available_at": item.get("available_at"),
+                        }
+                    )
+
+            return {
+                "attribution_id": payload.get("attribution_id"),
+                "forecast_id": payload.get("forecast_id"),
+                "thesis_id": payload.get("thesis_id"),
+                "timestamps": {
+                    "as_of": payload.get("as_of"),
+                    "evaluated_at": payload.get("evaluated_at"),
+                    "created_at": payload.get("created_at"),
+                },
+                "hard_evidence_refs": hard_refs,
+                "hard_evidence_preview": _preview(evidence_hard),
+                "soft_evidence_preview": _preview(evidence_soft),
+                "lineage_summary": [
+                    ref.get("lineage_id") for ref in hard_refs if ref.get("lineage_id")
+                ],
+            }
+        except Exception:
+            return None
+        finally:
+            cursor.close()
+            conn.close()
+
     def read_expected_vs_realized(
         self,
         horizon: str = "1M",

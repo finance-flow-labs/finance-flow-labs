@@ -49,11 +49,29 @@ class FakeDashboardRepo:
 
     def read_forecast_error_attributions(self, horizon="1M", limit=200):
         return [
-            {"category": "macro_miss", "evidence_hard": [{"source": "FRED"}], "evidence_soft": [{"note": "regime"}]},
-            {"category": "macro_miss", "evidence_hard": [{"metric": "CPI"}], "evidence_soft": []},
-            {"category": "valuation_miss", "evidence_hard": [], "evidence_soft": [{"note": "narrative"}]},
-            {"category": "unknown", "evidence_hard": [], "evidence_soft": []},
+            {
+                "attribution_id": 101,
+                "category": "macro_miss",
+                "evidence_hard": [{"source": "FRED"}],
+                "evidence_soft": [{"note": "regime"}],
+            },
+            {
+                "attribution_id": 102,
+                "category": "macro_miss",
+                "evidence_hard": [{"metric": "CPI"}],
+                "evidence_soft": [],
+            },
+            {
+                "attribution_id": 103,
+                "category": "valuation_miss",
+                "evidence_hard": [],
+                "evidence_soft": [{"note": "narrative"}],
+            },
+            {"attribution_id": 104, "category": "unknown", "evidence_hard": [], "evidence_soft": []},
         ]
+
+    def read_forecast_error_attribution_detail(self, attribution_id: int, max_preview_chars: int = 240):
+        return {"attribution_id": attribution_id, "hard_evidence_preview": "[]", "soft_evidence_preview": "[]"}
 
 
 def test_dashboard_service_uses_policy_locked_horizon_list():
@@ -88,7 +106,10 @@ def test_dashboard_service_builds_operator_view_model():
     assert view["attribution_summary"]["evidence_gap_coverage"] == 0.25
     assert len(view["attribution_gap_rows"]) == 4
     assert view["attribution_gap_rows"][0]["evidence_gap_reason"] == "hard_untraceable"
+    assert view["attribution_gap_rows"][0]["reason_codes"] == ["hard_evidence_untraceable"]
+    assert view["attribution_gap_rows"][0]["recommended_action"] == "mapping_fix_required"
     assert view["attribution_gap_rows"][-1]["evidence_gap_reason"] == "missing_hard_and_soft"
+    assert view["attribution_gap_details"][102]["attribution_id"] == 102
     assert view["policy_compliance"]["summary"]["total"] == 11
     assert view["policy_compliance"]["summary"]["unknown"] == 2
     assert view["policy_compliance"]["checks"][6]["status"] == "WARN"

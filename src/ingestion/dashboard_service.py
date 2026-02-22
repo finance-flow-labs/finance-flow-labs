@@ -29,6 +29,12 @@ class DashboardRepositoryProtocol(Protocol):
         self, horizon: str = "1M", limit: int = 5
     ) -> list[dict[str, object]]: ...
 
+    def read_forecast_error_attribution_detail(
+        self,
+        attribution_id: int,
+        max_preview_chars: int = 240,
+    ) -> dict[str, object] | None: ...
+
 
 def _count_non_empty_evidence(value: object) -> bool:
     if isinstance(value, (list, str, dict)):
@@ -116,6 +122,22 @@ def _classify_evidence_gap(evidence_hard: object, evidence_soft: object) -> str:
     if has_hard and not has_traceable_hard:
         return "hard_untraceable"
     return "none"
+
+
+def _to_reason_codes(evidence_gap_reason: str) -> list[str]:
+    if evidence_gap_reason == "missing_hard_and_soft":
+        return ["missing_hard_evidence", "missing_soft_evidence"]
+    if evidence_gap_reason == "hard_untraceable":
+        return ["hard_evidence_untraceable"]
+    return []
+
+
+def _recommended_action(evidence_gap_reason: str) -> str:
+    if evidence_gap_reason == "missing_hard_and_soft":
+        return "data_lag_or_pipeline_failure"
+    if evidence_gap_reason == "hard_untraceable":
+        return "mapping_fix_required"
+    return "no_action"
 
 
 def _safe_repo_call(default: object, fn: object, *args: object, **kwargs: object) -> object:
@@ -540,6 +562,7 @@ def build_dashboard_view(
             }
 
     attribution_gap_rows: list[dict[str, object]] = []
+    attribution_gap_details: dict[int, dict[str, object]] = {}
     if hasattr(repository, "read_forecast_error_attributions"):
         attribution_rows = _safe_repo_call(
             [],
@@ -596,6 +619,8 @@ def build_dashboard_view(
                         "has_traceable_hard_evidence": has_traceable_hard,
                         "has_soft_evidence": has_soft,
                         "evidence_gap_reason": evidence_gap_reason,
+                        "reason_codes": _to_reason_codes(evidence_gap_reason),
+                        "recommended_action": _recommended_action(evidence_gap_reason),
                         **trace_fields,
                     }
                 )
@@ -607,6 +632,22 @@ def build_dashboard_view(
                     soft_count += 1
                 if evidence_gap_reason == "missing_hard_and_soft":
                     evidence_gap_count += 1
+
+            if hasattr(repository, "read_forecast_error_attribution_detail"):
+                for row in attribution_gap_rows:
+                    if row.get("evidence_gap_reason") == "none":
+                        continue
+                    attribution_id = row.get("attribution_id")
+                    if not isinstance(attribution_id, int):
+                        continue
+                    detail = _safe_repo_call(
+                        None,
+                        repository.read_forecast_error_attribution_detail,
+                        attribution_id=attribution_id,
+                        max_preview_chars=240,
+                    )
+                    if isinstance(detail, dict):
+                        attribution_gap_details[attribution_id] = detail
 
             if valid_rows > 0:
                 attribution_summary["total"] = valid_rows
@@ -643,6 +684,7 @@ def build_dashboard_view(
         },
         "attribution_summary": attribution_summary,
         "attribution_gap_rows": attribution_gap_rows,
+        "attribution_gap_details": attribution_gap_details,
         "policy_compliance": _build_policy_compliance(
             repository=repository,
             counters=counters if isinstance(counters, dict) else {},

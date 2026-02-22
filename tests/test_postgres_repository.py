@@ -441,6 +441,45 @@ def test_postgres_repository_reads_forecast_error_attributions_with_hard_soft_ev
     assert rows[0]["evidence_soft"][0]["source"] == "analyst"
 
 
+def test_postgres_repository_reads_forecast_error_attribution_detail_payload():
+    cursor = FakeCursor(
+        fetch_one_rows=[
+            (
+                501,
+                7,
+                "thesis-1",
+                "2026-02-22T00:00:00+00:00",
+                "2026-03-22T00:00:00+00:00",
+                "2026-03-22T00:05:00+00:00",
+                [{"source": "fred", "metric": "CPI", "lineage_id": "lin-1"}],
+                [{"source": "analyst", "note": "policy surprise"}],
+            )
+        ],
+        columns=[
+            "attribution_id",
+            "forecast_id",
+            "thesis_id",
+            "as_of",
+            "evaluated_at",
+            "created_at",
+            "evidence_hard",
+            "evidence_soft",
+        ],
+    )
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    payload = repo.read_forecast_error_attribution_detail(attribution_id=501, max_preview_chars=80)
+
+    assert payload is not None
+    sql, params = cursor.executed[0]
+    assert "FROM forecast_error_attributions fea" in sql
+    assert params == (501,)
+    assert payload["attribution_id"] == 501
+    assert payload["hard_evidence_refs"][0]["source"] == "fred"
+    assert payload["lineage_summary"] == ["lin-1"]
+
+
 def test_postgres_repository_reads_expected_vs_realized_with_evidence_fields():
     cursor = FakeCursor(
         fetch_rows=[

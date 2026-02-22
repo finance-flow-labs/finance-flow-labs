@@ -533,6 +533,48 @@ def run_streamlit_app(dsn: str) -> None:
             ]
         if rows_to_show:
             st.dataframe(rows_to_show, use_container_width=True)
+            selectable_rows = [
+                row
+                for row in rows_to_show
+                if isinstance(row, Mapping) and row.get("evidence_gap_reason") != "none"
+            ]
+            attribution_ids = [
+                int(row["attribution_id"])
+                for row in selectable_rows
+                if isinstance(row.get("attribution_id"), int)
+            ]
+            if attribution_ids:
+                selected_id = st.selectbox(
+                    "Drill-through attribution_id",
+                    attribution_ids,
+                    key="attribution_gap_drillthrough_id",
+                )
+                detail_map = view.get("attribution_gap_details", {})
+                detail = detail_map.get(selected_id) if isinstance(detail_map, Mapping) else None
+                selected_row = next(
+                    (
+                        row
+                        for row in selectable_rows
+                        if isinstance(row, Mapping) and row.get("attribution_id") == selected_id
+                    ),
+                    None,
+                )
+                with st.expander("Evidence Drill-through", expanded=True):
+                    if isinstance(selected_row, Mapping):
+                        st.write(
+                            {
+                                "reason_codes": selected_row.get("reason_codes", []),
+                                "recommended_action": selected_row.get("recommended_action", "no_action"),
+                                "trace_source": selected_row.get("trace_source", ""),
+                                "trace_metric": selected_row.get("trace_metric", ""),
+                                "trace_as_of": selected_row.get("trace_as_of", ""),
+                                "trace_lineage_id": selected_row.get("trace_lineage_id", ""),
+                            }
+                        )
+                    if isinstance(detail, Mapping):
+                        st.write(detail)
+                    else:
+                        st.info("Detail payload unavailable for selected row.")
         else:
             st.info("No attribution evidence gaps detected in recent 1M rows.")
 
