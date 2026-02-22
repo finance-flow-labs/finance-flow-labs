@@ -58,3 +58,33 @@ def test_dashboard_app_builds_cards_from_view_model():
     assert cards["soft_evidence_pct"] == "57.0%"
     assert cards["evidence_gap_count"] == 1
     assert cards["evidence_gap_pct"] == "14.0%"
+
+
+def test_dashboard_app_handles_non_numeric_counter_strings_safely():
+    cards = dashboard_app.build_operator_cards(
+        {
+            "counters": {
+                "raw_events": "n/a",
+                "canonical_events": "",
+                "quarantine_events": "unknown",
+            },
+            "learning_metrics": {
+                "forecast_count": "-",
+                "realized_count": "none",
+            },
+            "attribution_summary": {
+                "total": "not-a-number",
+                "top_count": "?",
+                "evidence_gap_count": "",
+            },
+        }
+    )
+
+    assert cards["raw_events"] == 0
+    assert cards["canonical_events"] == 0
+    assert cards["quarantine_events"] == 0
+    assert cards["forecast_count"] == 0
+    assert cards["realized_count"] == 0
+    assert cards["attribution_total"] == 0
+    assert cards["attribution_top_count"] == 0
+    assert cards["evidence_gap_count"] == 0

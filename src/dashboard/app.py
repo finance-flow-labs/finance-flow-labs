@@ -12,7 +12,10 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         if isinstance(value, float):
             return int(value)
         if isinstance(value, str):
-            return int(value)
+            try:
+                return int(value)
+            except ValueError:
+                return 0
         return 0
 
     counters = view.get("counters", {})
