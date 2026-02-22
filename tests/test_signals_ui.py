@@ -35,6 +35,8 @@ def test_render_macro_regime_card_with_signal(monkeypatch):
             "confidence": 0.8,
             "drivers": ["금리 하락 방향", "실업률 안정", "CPI 둔화", "ignored"],
             "as_of": "2026-02-22T18:30:00Z",
+            "evidence_hard": ["FRED:CPIAUCSL 3m down", "FRED:UNRATE stable"],
+            "evidence_soft": ["Fed commentary softer"],
         }
     )
 
@@ -46,6 +48,10 @@ def test_render_macro_regime_card_with_signal(monkeypatch):
     assert calls["write"].count("• 금리 하락 방향") == 1
     assert calls["write"].count("• 실업률 안정") == 1
     assert calls["write"].count("• CPI 둔화") == 1
+    assert "HARD evidence:" in calls["write"]
+    assert "SOFT evidence:" in calls["write"]
+    assert calls["write"].count("• FRED:CPIAUCSL 3m down") == 1
+    assert calls["write"].count("• Fed commentary softer") == 1
 
 
 def test_render_macro_regime_card_placeholder_when_data_missing(monkeypatch):

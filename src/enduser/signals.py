@@ -68,3 +68,20 @@ def render_macro_regime_card(regime_signal: dict[str, Any] | None) -> None:
             st.write(f"• {driver}")
     else:
         st.write("• Driver data unavailable")
+
+    evidence_hard = [str(item) for item in regime_signal.get("evidence_hard", []) if str(item).strip()]
+    evidence_soft = [str(item) for item in regime_signal.get("evidence_soft", []) if str(item).strip()]
+
+    st.write("HARD evidence:")
+    if evidence_hard:
+        for item in evidence_hard[:3]:
+            st.write(f"• {item}")
+    else:
+        st.write("• 없음")
+
+    st.write("SOFT evidence:")
+    if evidence_soft:
+        for item in evidence_soft[:3]:
+            st.write(f"• {item}")
+    else:
+        st.write("• 없음")
