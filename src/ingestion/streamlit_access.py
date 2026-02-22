@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from urllib.error import HTTPError, URLError
+from urllib.error import URLError
 from urllib.parse import urljoin
-from urllib.request import Request, urlopen
 import time
+
+import requests
 
 
 AUTH_WALL_HOST = "share.streamlit.io"
@@ -45,18 +46,25 @@ class AccessCheckResult:
         }
 
 
-def _default_fetch(url: str, timeout_seconds: float) -> tuple[int | None, str, Mapping[str, str], str]:
-    request = Request(url=url, method="GET")
+def _default_fetch(url: str, timeout_seconds: float) -> tuple[int | None, str, Mapping[str, str], str, Sequence[str]]:
     try:
-        with urlopen(request, timeout=timeout_seconds) as response:
-            status_code = getattr(response, "status", None)
-            final_url = response.geturl()
-            headers = dict(response.headers.items())
-            body = response.read(4096).decode("utf-8", errors="replace")
-            return status_code, final_url, headers, body
-    except HTTPError as exc:
-        body = exc.read(4096).decode("utf-8", errors="replace")
-        return exc.code, exc.geturl() or url, dict(exc.headers.items()), body
+        response = requests.get(url, timeout=timeout_seconds, allow_redirects=True)
+        redirect_chain = [hop.url for hop in response.history]
+        return response.status_code, response.url, dict(response.headers.items()), response.text[:4096], redirect_chain
+    except requests.RequestException as exc:
+        raise URLError(str(exc)) from exc
+
+
+def _normalize_fetch_result(
+    payload: tuple[int | None, str, Mapping[str, str], str]
+    | tuple[int | None, str, Mapping[str, str], str, Sequence[str]],
+) -> tuple[int | None, str, Mapping[str, str], str, Sequence[str]]:
+    if len(payload) == 4:
+        status_code, final_url, headers, body = payload
+        return status_code, final_url, headers, body, ()
+
+    status_code, final_url, headers, body, redirect_chain = payload
+    return status_code, final_url, headers, body, tuple(redirect_chain)
 
 
 def _is_auth_wall_url(url: str) -> bool:
@@ -85,10 +93,14 @@ def _check_streamlit_access_once(
     url: str,
     *,
     timeout_seconds: float,
-    fetch_fn: Callable[[str, float], tuple[int | None, str, Mapping[str, str], str]],
+    fetch_fn: Callable[
+        [str, float],
+        tuple[int | None, str, Mapping[str, str], str]
+        | tuple[int | None, str, Mapping[str, str], str, Sequence[str]],
+    ],
 ) -> AccessCheckResult:
     try:
-        status_code, final_url, headers, body = fetch_fn(url, timeout_seconds)
+        status_code, final_url, headers, body, redirect_chain = _normalize_fetch_result(fetch_fn(url, timeout_seconds))
     except URLError as exc:
         return AccessCheckResult(
             ok=False,
@@ -99,7 +111,7 @@ def _check_streamlit_access_once(
         )
 
     location = headers.get("Location") or headers.get("location")
-    auth_wall_redirect = _is_auth_wall_url(final_url)
+    auth_wall_redirect = _is_auth_wall_url(final_url) or any(_is_auth_wall_url(hop_url) for hop_url in redirect_chain)
     if not auth_wall_redirect and isinstance(location, str):
         next_url = urljoin(url, location)
         auth_wall_redirect = _is_auth_wall_url(next_url)
@@ -137,7 +149,12 @@ def check_streamlit_access(
     url: str,
     *,
     timeout_seconds: float = 15,
-    fetch: Callable[[str, float], tuple[int | None, str, Mapping[str, str], str]] | None = None,
+    fetch: Callable[
+        [str, float],
+        tuple[int | None, str, Mapping[str, str], str]
+        | tuple[int | None, str, Mapping[str, str], str, Sequence[str]],
+    ]
+    | None = None,
     attempts: int = 3,
     backoff_seconds: float = 0.5,
 ) -> AccessCheckResult:
