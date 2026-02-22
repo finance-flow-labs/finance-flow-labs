@@ -219,6 +219,16 @@ def test_dashboard_service_policy_compliance_marks_missing_benchmark_dependencie
     assert "Missing benchmark series" in benchmark_check["reason"]
 
 
+def test_dashboard_service_policy_checks_include_as_of_from_latest_run_when_direct_evidence_missing():
+    view = build_dashboard_view(FakeDashboardRepo())
+    checks = view["policy_compliance"]["checks"]
+
+    assert checks[0]["as_of"] == "2026-02-18T01:00:00Z"
+    assert checks[1]["as_of"] == "2026-02-18T01:00:00Z"
+    assert checks[2]["as_of"] == "2026-02-18T01:00:00Z"
+    assert checks[3]["as_of"] == "2026-02-18T01:00:00Z"
+
+
 def test_dashboard_service_learning_reliability_threshold_env_override(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("LEARNING_RELIABILITY_MIN_REALIZED_1M", "10")
     monkeypatch.setenv("LEARNING_RELIABILITY_COVERAGE_FLOOR", "0.65")

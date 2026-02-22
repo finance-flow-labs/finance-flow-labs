@@ -209,6 +209,7 @@ def _build_policy_compliance(
     repository: DashboardRepositoryProtocol,
     counters: dict[str, object],
     learning_metrics_by_horizon: dict[str, dict[str, object]],
+    latest_run_time: str | None,
 ) -> dict[str, object]:
     checks: list[dict[str, object]] = []
 
@@ -225,7 +226,7 @@ def _build_policy_compliance(
             "check": "Universe coverage (US/KR/Crypto)",
             "status": universe_status,
             "reason": universe_reason,
-            "as_of": None,
+            "as_of": latest_run_time,
             "evidence": {
                 "raw_events": raw_events,
                 "canonical_events": canonical_events,
@@ -239,7 +240,7 @@ def _build_policy_compliance(
             "check": "Crypto sleeve composition (BTC/ETH >=70%, alts <=30%)",
             "status": "UNKNOWN",
             "reason": "Portfolio crypto sleeve exposure feed not available.",
-            "as_of": None,
+            "as_of": latest_run_time,
             "evidence": {"dependency": "portfolio_exposure_crypto_sleeve"},
         }
     )
@@ -248,7 +249,7 @@ def _build_policy_compliance(
             "check": "Leverage sleeve cap (<=20%)",
             "status": "UNKNOWN",
             "reason": "Portfolio leverage exposure feed not available.",
-            "as_of": None,
+            "as_of": latest_run_time,
             "evidence": {"dependency": "portfolio_exposure_leverage_sleeve"},
         }
     )
@@ -266,7 +267,7 @@ def _build_policy_compliance(
             "check": "Primary horizon readiness (1M)",
             "status": primary_status,
             "reason": str(primary.get("reliability_reason", "missing_reliability_metadata")),
-            "as_of": None,
+            "as_of": latest_run_time,
             "evidence": {
                 "reliability_state": reliability,
                 "realized_count": primary.get("realized_count", 0),
@@ -305,7 +306,7 @@ def _build_policy_compliance(
             "check": "Benchmark readiness (QQQ/KOSPI200/BTC/SGOV)",
             "status": benchmark_status,
             "reason": benchmark_reason,
-            "as_of": max([v for v in benchmark_as_of.values() if v is not None], default=None),
+            "as_of": max([v for v in benchmark_as_of.values() if v is not None], default=latest_run_time),
             "evidence": {
                 "series_point_count": benchmark_points,
                 "series_latest_as_of": benchmark_as_of,
@@ -497,6 +498,7 @@ def build_dashboard_view(
             repository=repository,
             counters=counters if isinstance(counters, dict) else {},
             learning_metrics_by_horizon=learning_metrics_by_horizon,
+            latest_run_time=last_run_time or None,
         ),
         "recent_runs": recent_runs,
     }

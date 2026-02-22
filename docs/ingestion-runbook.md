@@ -103,6 +103,7 @@ Validation guardrails:
     - Primary horizon readiness (1M): mapped from reliability state (`reliable`→PASS, `low_sample`→WARN, `insufficient`→FAIL)
     - Benchmark readiness (QQQ/KOSPI200/BTC/SGOV): checks latest `macro_series_points` presence per component
     - Summary counters shown for PASS/WARN/FAIL/UNKNOWN (no silent PASS on missing dependencies)
+    - Each check exposes `as_of`; when direct evidence timestamp is unavailable, dashboard falls back to latest successful run time so operators can trace data recency explicitly
 - Reliability threshold env overrides:
   - `LEARNING_RELIABILITY_MIN_REALIZED_1W` (default: `8`)
   - `LEARNING_RELIABILITY_MIN_REALIZED_1M` (default: `12`)
