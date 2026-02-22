@@ -84,6 +84,43 @@ def test_read_forecast_error_attributions_command_uses_postgres_repository(monke
     assert rows == [{"horizon": "1W", "limit": 7, "dsn": "postgres://example"}]
 
 
+def test_cli_exposes_streamlit_access_check_command_with_defaults():
+    parser = cli.build_parser()
+    args = parser.parse_args(["streamlit-access-check", "--url", "https://finance-flow-labs.streamlit.app/"])
+
+    assert args.command == "streamlit-access-check"
+    assert args.url == "https://finance-flow-labs.streamlit.app/"
+    assert args.timeout_seconds == 15
+
+
+def test_run_streamlit_access_check_command_returns_serializable_dict(monkeypatch):
+    class FakeResult:
+        def to_dict(self):
+            return {
+                "ok": False,
+                "status_code": 303,
+                "final_url": "https://finance-flow-labs.streamlit.app/",
+                "auth_wall_redirect": True,
+                "reason": "auth_wall_redirect_detected",
+            }
+
+    class FakeModule:
+        @staticmethod
+        def check_streamlit_access(url: str, timeout_seconds: float):
+            assert url == "https://finance-flow-labs.streamlit.app/"
+            assert timeout_seconds == 9
+            return FakeResult()
+
+    monkeypatch.setattr(cli.importlib, "import_module", lambda _: FakeModule())
+
+    result = cli.run_streamlit_access_check_command(
+        "https://finance-flow-labs.streamlit.app/", timeout_seconds=9
+    )
+
+    assert result["auth_wall_redirect"] is True
+    assert result["reason"] == "auth_wall_redirect_detected"
+
+
 def test_cli_exposes_forecast_record_create_command():
     parser = cli.build_parser()
     args = parser.parse_args(
