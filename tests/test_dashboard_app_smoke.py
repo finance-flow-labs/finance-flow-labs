@@ -27,6 +27,32 @@ def test_dashboard_app_builds_cards_from_view_model():
                 "mean_abs_forecast_error": 0.025,
                 "mean_signed_forecast_error": -0.007,
             },
+            "learning_metrics_by_horizon": {
+                "1W": {
+                    "horizon": "1W",
+                    "forecast_count": 5,
+                    "realized_count": 4,
+                    "realization_coverage": 0.8,
+                    "hit_rate": 0.5,
+                    "mean_abs_forecast_error": 0.01,
+                },
+                "1M": {
+                    "horizon": "1M",
+                    "forecast_count": 25,
+                    "realized_count": 10,
+                    "realization_coverage": 0.4,
+                    "hit_rate": 0.6,
+                    "mean_abs_forecast_error": 0.025,
+                },
+                "3M": {
+                    "horizon": "3M",
+                    "forecast_count": 12,
+                    "realized_count": 8,
+                    "realization_coverage": 0.67,
+                    "hit_rate": 0.58,
+                    "mean_abs_forecast_error": 0.03,
+                },
+            },
             "attribution_summary": {
                 "total": 7,
                 "top_category": "macro_miss",
@@ -59,6 +85,8 @@ def test_dashboard_app_builds_cards_from_view_model():
     assert cards["evidence_gap_count"] == 1
     assert cards["evidence_gap_pct"] == "14.0%"
     assert cards["has_critical_metric_alert"] is False
+    assert len(cards["learning_metrics_panel"]) == 3
+    assert cards["learning_metrics_panel"][0]["horizon"] == "1W"
 
 
 def test_dashboard_app_treats_malformed_count_metrics_as_unknown_or_error():
