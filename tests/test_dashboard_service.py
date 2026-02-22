@@ -46,6 +46,7 @@ class FakeDashboardRepo:
             {"category": "macro_miss", "evidence_hard": [{"source": "FRED"}], "evidence_soft": [{"note": "regime"}]},
             {"category": "macro_miss", "evidence_hard": [{"source": "ECOS"}], "evidence_soft": []},
             {"category": "valuation_miss", "evidence_hard": [], "evidence_soft": [{"note": "narrative"}]},
+            {"category": "unknown", "evidence_hard": [], "evidence_soft": []},
         ]
 
 
@@ -57,11 +58,13 @@ def test_dashboard_service_builds_operator_view_model():
     assert view["counters"]["raw_events"] == 100
     assert view["learning_metrics"]["horizon"] == "1M"
     assert view["learning_metrics"]["hit_rate"] == 0.58
-    assert view["attribution_summary"]["total"] == 3
+    assert view["attribution_summary"]["total"] == 4
     assert view["attribution_summary"]["top_category"] == "macro_miss"
     assert view["attribution_summary"]["top_count"] == 2
     assert len(view["attribution_summary"]["top_categories"]) == 2
     assert view["attribution_summary"]["top_categories"][0]["mean_abs_contribution"] == 0.021
-    assert view["attribution_summary"]["hard_evidence_coverage"] == 2 / 3
-    assert view["attribution_summary"]["soft_evidence_coverage"] == 2 / 3
+    assert view["attribution_summary"]["hard_evidence_coverage"] == 0.5
+    assert view["attribution_summary"]["soft_evidence_coverage"] == 0.5
+    assert view["attribution_summary"]["evidence_gap_count"] == 1
+    assert view["attribution_summary"]["evidence_gap_coverage"] == 0.25
     assert len(view["recent_runs"]) == 2

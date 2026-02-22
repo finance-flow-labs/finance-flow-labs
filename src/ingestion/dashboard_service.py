@@ -38,6 +38,8 @@ def build_dashboard_view(
         "top_categories": [],
         "hard_evidence_coverage": None,
         "soft_evidence_coverage": None,
+        "evidence_gap_count": 0,
+        "evidence_gap_coverage": None,
     }
     if hasattr(repository, "read_forecast_error_category_stats"):
         category_stats = repository.read_forecast_error_category_stats(horizon="1M", limit=5)
@@ -50,6 +52,8 @@ def build_dashboard_view(
                 "top_categories": category_stats,
                 "hard_evidence_coverage": None,
                 "soft_evidence_coverage": None,
+                "evidence_gap_count": 0,
+                "evidence_gap_coverage": None,
             }
 
     if hasattr(repository, "read_forecast_error_attributions"):
@@ -77,19 +81,27 @@ def build_dashboard_view(
 
             hard_count = 0
             soft_count = 0
+            evidence_gap_count = 0
             valid_rows = 0
             for row in attribution_rows:
                 if not isinstance(row, dict):
                     continue
                 valid_rows += 1
-                if _count_non_empty_evidence(row.get("evidence_hard")):
+                has_hard = _count_non_empty_evidence(row.get("evidence_hard"))
+                has_soft = _count_non_empty_evidence(row.get("evidence_soft"))
+                if has_hard:
                     hard_count += 1
-                if _count_non_empty_evidence(row.get("evidence_soft")):
+                if has_soft:
                     soft_count += 1
+                if not has_hard and not has_soft:
+                    evidence_gap_count += 1
 
             if valid_rows > 0:
+                attribution_summary["total"] = valid_rows
                 attribution_summary["hard_evidence_coverage"] = hard_count / valid_rows
                 attribution_summary["soft_evidence_coverage"] = soft_count / valid_rows
+                attribution_summary["evidence_gap_count"] = evidence_gap_count
+                attribution_summary["evidence_gap_coverage"] = evidence_gap_count / valid_rows
 
     if recent_runs:
         latest = recent_runs[0]
