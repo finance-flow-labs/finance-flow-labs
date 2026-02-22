@@ -1033,5 +1033,34 @@ class PostgresRepository:
         # Return chronological order (oldest first) for anomaly detection
         return list(reversed([dict(zip(columns, row)) for row in rows]))
 
+    def read_latest_canonical_metric(self, metric_name: str) -> dict[str, object] | None:
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                source,
+                entity_id,
+                metric_name,
+                metric_value,
+                as_of,
+                available_at,
+                ingested_at,
+                lineage_id
+            FROM canonical_fact_store
+            WHERE metric_name = %s
+            ORDER BY as_of DESC, available_at DESC, ingested_at DESC
+            LIMIT 1
+            """,
+            (metric_name,),
+        )
+        row = cursor.fetchone()
+        columns = [desc[0] for desc in cursor.description]
+        cursor.close()
+        conn.close()
+        if row is None:
+            return None
+        return dict(zip(columns, row))
+
     def snapshot_counts(self) -> dict[str, int]:
         return self.read_status_counters()

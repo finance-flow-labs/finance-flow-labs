@@ -332,3 +332,33 @@ def test_dashboard_service_learning_reliability_threshold_env_override(monkeypat
     assert rel["reliability_state"] == "low_sample"
     assert "coverage_below_floor" in rel["reliability_reason"]
     assert rel["min_realized_required"] == 10
+
+
+def test_dashboard_service_policy_compliance_uses_portfolio_exposure_feed_when_available():
+    class ExposureRepo(FakeDashboardRepo):
+        def read_latest_canonical_metric(self, metric_name: str):
+            payload = {
+                "portfolio_exposure_crypto_btc_eth_share": {
+                    "metric_name": metric_name,
+                    "metric_value": 0.75,
+                    "as_of": "2026-02-22T08:30:00Z",
+                },
+                "portfolio_exposure_crypto_alt_share": {
+                    "metric_name": metric_name,
+                    "metric_value": 0.25,
+                    "as_of": "2026-02-22T08:30:00Z",
+                },
+                "portfolio_exposure_leverage_share": {
+                    "metric_name": metric_name,
+                    "metric_value": 0.18,
+                    "as_of": "2026-02-22T08:35:00Z",
+                },
+            }
+            return payload.get(metric_name)
+
+    view = build_dashboard_view(ExposureRepo())
+    checks = {row["check"]: row for row in view["policy_compliance"]["checks"]}
+
+    assert checks["Crypto sleeve composition (BTC/ETH >=70%, alts <=30%)"]["status"] == "PASS"
+    assert checks["Leverage sleeve cap (<=20%)"]["status"] == "PASS"
+    assert view["policy_compliance"]["summary"]["unknown"] == 0

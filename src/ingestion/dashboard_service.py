@@ -35,6 +35,8 @@ class DashboardRepositoryProtocol(Protocol):
         max_preview_chars: int = 240,
     ) -> dict[str, object] | None: ...
 
+    def read_latest_canonical_metric(self, metric_name: str) -> dict[str, object] | None: ...
+
 
 def _count_non_empty_evidence(value: object) -> bool:
     if isinstance(value, (list, str, dict)):
@@ -350,33 +352,129 @@ def _build_policy_compliance(
         ]
     )
 
-    checks.extend(
-        [
-            {
-                "check": "Crypto scope lock (BTC/ETH core + top alts 일부)",
-                "status": "PASS",
-                "reason": "Policy lock allows BTC/ETH core with capped top-alt sleeve.",
-                "as_of": latest_run_time,
-                "evidence": {"policy_lock": POLICY_LOCK_REFERENCE},
-            },
+    checks.append(
+        {
+            "check": "Crypto scope lock (BTC/ETH core + top alts 일부)",
+            "status": "PASS",
+            "reason": "Policy lock allows BTC/ETH core with capped top-alt sleeve.",
+            "as_of": latest_run_time,
+            "evidence": {"policy_lock": POLICY_LOCK_REFERENCE},
+        }
+    )
+
+    crypto_btc_eth_metric = os.getenv("PORTFOLIO_EXPOSURE_CRYPTO_BTC_ETH_METRIC", "portfolio_exposure_crypto_btc_eth_share")
+    crypto_alt_metric = os.getenv("PORTFOLIO_EXPOSURE_CRYPTO_ALT_METRIC", "portfolio_exposure_crypto_alt_share")
+    leverage_metric = os.getenv("PORTFOLIO_EXPOSURE_LEVERAGE_METRIC", "portfolio_exposure_leverage_share")
+
+    def _to_share(value: object) -> float | None:
+        try:
+            if value is None:
+                return None
+            parsed = float(value)
+            if parsed < 0:
+                return None
+            if parsed > 1.0:
+                return parsed / 100.0 if parsed <= 100.0 else None
+            return parsed
+        except (TypeError, ValueError):
+            return None
+
+    crypto_btc_eth_row = None
+    crypto_alt_row = None
+    leverage_row = None
+    if hasattr(repository, "read_latest_canonical_metric"):
+        crypto_btc_eth_row = _safe_repo_call(None, repository.read_latest_canonical_metric, metric_name=crypto_btc_eth_metric)
+        crypto_alt_row = _safe_repo_call(None, repository.read_latest_canonical_metric, metric_name=crypto_alt_metric)
+        leverage_row = _safe_repo_call(None, repository.read_latest_canonical_metric, metric_name=leverage_metric)
+
+    btc_eth_share = _to_share((crypto_btc_eth_row or {}).get("metric_value") if isinstance(crypto_btc_eth_row, dict) else None)
+    alt_share = _to_share((crypto_alt_row or {}).get("metric_value") if isinstance(crypto_alt_row, dict) else None)
+    if btc_eth_share is not None and alt_share is None:
+        alt_share = max(0.0, 1.0 - btc_eth_share)
+    if alt_share is not None and btc_eth_share is None:
+        btc_eth_share = max(0.0, 1.0 - alt_share)
+
+    if btc_eth_share is None or alt_share is None:
+        checks.append(
             {
                 "check": "Crypto sleeve composition (BTC/ETH >=70%, alts <=30%)",
                 "status": "UNKNOWN",
-                "reason": "Portfolio crypto sleeve exposure feed not available.",
+                "reason": "Portfolio crypto sleeve exposure feed missing latest btc/eth or alt share.",
                 "as_of": latest_run_time,
-                "evidence": {"dependency": "portfolio_exposure_crypto_sleeve"},
-            },
-        ]
-    )
-    checks.append(
-        {
-            "check": "Leverage sleeve cap (<=20%)",
-            "status": "UNKNOWN",
-            "reason": "Portfolio leverage exposure feed not available.",
-            "as_of": latest_run_time,
-            "evidence": {"dependency": "portfolio_exposure_leverage_sleeve"},
-        }
-    )
+                "evidence": {
+                    "dependency": "portfolio_exposure_crypto_sleeve",
+                    "metric_names": [crypto_btc_eth_metric, crypto_alt_metric],
+                    "btc_eth_row": crypto_btc_eth_row,
+                    "alt_row": crypto_alt_row,
+                },
+            }
+        )
+    else:
+        crypto_pass = btc_eth_share >= 0.70 and alt_share <= 0.30
+        checks.append(
+            {
+                "check": "Crypto sleeve composition (BTC/ETH >=70%, alts <=30%)",
+                "status": "PASS" if crypto_pass else "FAIL",
+                "reason": (
+                    "Crypto sleeve is within policy threshold."
+                    if crypto_pass
+                    else "Crypto sleeve violates policy threshold (btc_eth>=70% and alt<=30%)."
+                ),
+                "as_of": max(
+                    [
+                        v
+                        for v in [
+                            (crypto_btc_eth_row or {}).get("as_of") if isinstance(crypto_btc_eth_row, dict) else None,
+                            (crypto_alt_row or {}).get("as_of") if isinstance(crypto_alt_row, dict) else None,
+                        ]
+                        if v is not None
+                    ],
+                    default=latest_run_time,
+                ),
+                "evidence": {
+                    "btc_eth_share": btc_eth_share,
+                    "alt_share": alt_share,
+                    "metric_names": [crypto_btc_eth_metric, crypto_alt_metric],
+                    "btc_eth_row": crypto_btc_eth_row,
+                    "alt_row": crypto_alt_row,
+                },
+            }
+        )
+
+    leverage_share = _to_share((leverage_row or {}).get("metric_value") if isinstance(leverage_row, dict) else None)
+    if leverage_share is None:
+        checks.append(
+            {
+                "check": "Leverage sleeve cap (<=20%)",
+                "status": "UNKNOWN",
+                "reason": "Portfolio leverage exposure feed missing latest leverage share.",
+                "as_of": latest_run_time,
+                "evidence": {
+                    "dependency": "portfolio_exposure_leverage_sleeve",
+                    "metric_name": leverage_metric,
+                    "row": leverage_row,
+                },
+            }
+        )
+    else:
+        leverage_pass = leverage_share <= 0.20
+        checks.append(
+            {
+                "check": "Leverage sleeve cap (<=20%)",
+                "status": "PASS" if leverage_pass else "FAIL",
+                "reason": (
+                    "Leverage sleeve is within policy cap."
+                    if leverage_pass
+                    else "Leverage sleeve exceeds policy cap of 20%."
+                ),
+                "as_of": (leverage_row or {}).get("as_of") if isinstance(leverage_row, dict) else latest_run_time,
+                "evidence": {
+                    "leverage_share": leverage_share,
+                    "metric_name": leverage_metric,
+                    "row": leverage_row,
+                },
+            }
+        )
 
     primary = learning_metrics_by_horizon.get("1M", {})
     reliability = str(primary.get("reliability_state", "insufficient"))
