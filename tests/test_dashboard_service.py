@@ -153,3 +153,34 @@ def test_dashboard_service_ignores_invalid_string_evidence_payloads():
     assert summary["soft_evidence_coverage"] == 0.5
     assert summary["evidence_gap_count"] == 1
     assert summary["evidence_gap_coverage"] == 0.5
+
+
+class ObjectEvidenceRepo(FakeDashboardRepo):
+    def read_forecast_error_category_stats(self, horizon="1M", limit=5):
+        return []
+
+    def read_forecast_error_attributions(self, horizon="1M", limit=200):
+        return [
+            {
+                "category": "macro_miss",
+                "evidence_hard": '{"source":"FRED","metric":"CPI"}',
+                "evidence_soft": '{"items":[{"note":"single-payload"}]}',
+            },
+            {
+                "category": "valuation_miss",
+                "evidence_hard": {"items": [{"source": "ECOS", "metric": "CLI"}]},
+                "evidence_soft": {},
+            },
+        ]
+
+
+def test_dashboard_service_parses_object_evidence_payloads():
+    view = build_dashboard_view(ObjectEvidenceRepo())
+
+    summary = view["attribution_summary"]
+    assert summary["total"] == 2
+    assert summary["hard_evidence_coverage"] == 1.0
+    assert summary["hard_evidence_traceability_coverage"] == 1.0
+    assert summary["soft_evidence_coverage"] == 0.5
+    assert summary["evidence_gap_count"] == 0
+    assert summary["evidence_gap_coverage"] == 0.0

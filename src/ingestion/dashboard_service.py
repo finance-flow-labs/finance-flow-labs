@@ -16,9 +16,7 @@ class DashboardRepositoryProtocol(Protocol):
 
 
 def _count_non_empty_evidence(value: object) -> bool:
-    if isinstance(value, list):
-        return len(value) > 0
-    if isinstance(value, str):
+    if isinstance(value, (list, str, dict)):
         return len(_parse_evidence_items(value)) > 0
     return value is not None
 
@@ -26,14 +24,26 @@ def _count_non_empty_evidence(value: object) -> bool:
 def _parse_evidence_items(value: object) -> list[object]:
     if isinstance(value, list):
         return value
+    if isinstance(value, dict):
+        if not value:
+            return []
+        items = value.get("items")
+        if isinstance(items, list):
+            return items
+        return [value]
     if isinstance(value, str):
         trimmed = value.strip()
-        if trimmed in {"", "[]", "null", "None"}:
+        if trimmed in {"", "[]", "null", "None", "{}"}:
             return []
         try:
             parsed = json.loads(trimmed)
             if isinstance(parsed, list):
                 return parsed
+            if isinstance(parsed, dict):
+                items = parsed.get("items")
+                if isinstance(items, list):
+                    return items
+                return [parsed]
         except json.JSONDecodeError:
             return []
     return []
