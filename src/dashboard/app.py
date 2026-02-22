@@ -116,6 +116,30 @@ def _humanize_reliability_reason(reason: str) -> str:
     return reason
 
 
+def _build_policy_panel_rows(policy_checks: list[object]) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for check in policy_checks:
+        if not isinstance(check, Mapping):
+            continue
+        row = dict(check)
+        if row.get("check") == "Universe coverage (US/KR/Crypto)":
+            evidence = row.get("evidence") if isinstance(row.get("evidence"), Mapping) else {}
+            coverage_counts = evidence.get("region_coverage_counts") if isinstance(evidence, Mapping) else None
+            if not isinstance(coverage_counts, Mapping):
+                coverage_counts = {}
+            row["us_coverage_count"] = int(coverage_counts.get("US", 0) or 0)
+            row["kr_coverage_count"] = int(coverage_counts.get("KR", 0) or 0)
+            row["crypto_coverage_count"] = int(coverage_counts.get("CRYPTO", 0) or 0)
+            completeness = evidence.get("region_metadata_completeness") if isinstance(evidence, Mapping) else None
+            if isinstance(completeness, (int, float)) and math.isfinite(float(completeness)):
+                row["region_metadata_completeness"] = f"{float(completeness) * 100:.1f}%"
+            else:
+                row["region_metadata_completeness"] = "n/a"
+            row["evaluation_window_as_of"] = row.get("as_of") or "n/a"
+        rows.append(row)
+    return rows
+
+
 def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
     def to_int_metric(value: object) -> dict[str, object]:
         if value is None or _is_placeholder(value):
@@ -289,7 +313,7 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
     policy_checks = policy_payload.get("checks") if isinstance(policy_payload, Mapping) else None
     policy_summary = policy_payload.get("summary") if isinstance(policy_payload, Mapping) else None
     if isinstance(policy_checks, list) and policy_checks:
-        policy_compliance_panel = policy_checks
+        policy_compliance_panel = _build_policy_panel_rows(policy_checks)
     else:
         policy_compliance_panel = [
             {

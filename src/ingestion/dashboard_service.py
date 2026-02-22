@@ -262,9 +262,19 @@ def _build_policy_compliance(
                     )
                     break
 
+    required_region_count = len(POLICY_UNIVERSE_REGION_SENTINELS)
+    present_region_count = sum(1 for is_present in universe_regions_present.values() if is_present)
     missing_regions = [
         region for region, is_present in universe_regions_present.items() if not is_present
     ]
+    region_coverage_counts = {
+        region: len(universe_region_evidence.get(region, []))
+        for region in POLICY_UNIVERSE_REGION_SENTINELS
+    }
+    region_metadata_completeness = (
+        present_region_count / required_region_count if required_region_count > 0 else 0.0
+    )
+
     if all(universe_regions_present.values()):
         universe_status = "PASS"
         universe_reason = "Region-aware HARD evidence confirms US/KR/Crypto coverage."
@@ -290,6 +300,10 @@ def _build_policy_compliance(
                 "regions_present": universe_regions_present,
                 "missing_regions": missing_regions,
                 "region_metric_evidence": universe_region_evidence,
+                "region_coverage_counts": region_coverage_counts,
+                "required_region_count": required_region_count,
+                "present_region_count": present_region_count,
+                "region_metadata_completeness": region_metadata_completeness,
                 "region_dimension_ready": all(universe_regions_present.values()),
             },
         }

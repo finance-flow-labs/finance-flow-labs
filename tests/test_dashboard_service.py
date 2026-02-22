@@ -241,6 +241,10 @@ def test_dashboard_service_universe_compliance_requires_region_evidence_for_each
         "CRYPTO": True,
     }
     assert universe_check["evidence"]["missing_regions"] == ["KR"]
+    assert universe_check["evidence"]["region_coverage_counts"] == {"US": 1, "KR": 0, "CRYPTO": 1}
+    assert universe_check["evidence"]["present_region_count"] == 2
+    assert universe_check["evidence"]["required_region_count"] == 3
+    assert universe_check["evidence"]["region_metadata_completeness"] == pytest.approx(2 / 3)
 
 
 def test_dashboard_service_policy_compliance_marks_stale_benchmark_dependencies_warn():
