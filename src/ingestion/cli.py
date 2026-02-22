@@ -26,6 +26,10 @@ def build_parser() -> argparse.ArgumentParser:
     _ = run_update.add_argument("--source", required=True)
     _ = run_update.add_argument("--entity")
 
+    expected_vs_realized = subparsers.add_parser("expected-vs-realized")
+    _ = expected_vs_realized.add_argument("--horizon", default="1M")
+    _ = expected_vs_realized.add_argument("--limit", type=int, default=50)
+
     return parser
 
 
@@ -104,6 +108,15 @@ def run_update_command(source: str, entity: Optional[str] = None) -> dict[str, o
     return summary
 
 
+def read_expected_vs_realized_command(horizon: str = "1M", limit: int = 50) -> list[dict[str, object]]:
+    dsn = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
+    if not dsn:
+        raise ValueError("SUPABASE_DB_URL or DATABASE_URL is required")
+
+    repository = PostgresRepository(dsn=dsn)
+    return repository.read_expected_vs_realized(horizon=horizon, limit=limit)
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -111,6 +124,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.command == "run-update":
         summary = run_update_command(args.source, args.entity)
         print(json.dumps(summary))
+        return 0
+
+    if args.command == "expected-vs-realized":
+        rows = read_expected_vs_realized_command(horizon=args.horizon, limit=args.limit)
+        print(json.dumps(rows, default=str))
         return 0
 
     parser.print_help()
