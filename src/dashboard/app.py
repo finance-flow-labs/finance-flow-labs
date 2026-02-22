@@ -25,12 +25,28 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         canonical_events = 0
         quarantine_events = 0
 
+    learning = view.get("learning_metrics", {})
+    if isinstance(learning, Mapping):
+        realized_count = to_int(learning.get("realized_count", 0))
+        hit_rate = learning.get("hit_rate")
+        mae = learning.get("mean_abs_forecast_error")
+    else:
+        realized_count = 0
+        hit_rate = None
+        mae = None
+
+    hit_rate_pct = "n/a" if not isinstance(hit_rate, (int, float)) else f"{hit_rate * 100:.1f}%"
+    mae_pct = "n/a" if not isinstance(mae, (int, float)) else f"{mae * 100:.2f}%"
+
     return {
         "last_run_status": str(view.get("last_run_status", "no-data")),
         "last_run_time": str(view.get("last_run_time", "")),
         "raw_events": raw_events,
         "canonical_events": canonical_events,
         "quarantine_events": quarantine_events,
+        "realized_count": realized_count,
+        "hit_rate_pct": hit_rate_pct,
+        "mae_pct": mae_pct,
     }
 
 
@@ -52,12 +68,15 @@ def run_streamlit_app(dsn: str) -> None:
     st.title("Ingestion Operator Dashboard")
     st.caption("Manual update monitoring (cron separated)")
 
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(8)
     c1.metric("Last Status", cards["last_run_status"])
     c2.metric("Raw", cards["raw_events"])
     c3.metric("Canonical", cards["canonical_events"])
     c4.metric("Quarantine", cards["quarantine_events"])
-    c5.metric("Last Run Time", cards["last_run_time"])
+    c5.metric("1M Realized", cards["realized_count"])
+    c6.metric("1M Hit Rate", cards["hit_rate_pct"])
+    c7.metric("1M MAE", cards["mae_pct"])
+    c8.metric("Last Run Time", cards["last_run_time"])
 
     recent_runs = view.get("recent_runs", [])
     if isinstance(recent_runs, list) and recent_runs:

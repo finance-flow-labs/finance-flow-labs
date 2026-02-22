@@ -6,6 +6,8 @@ class DashboardRepositoryProtocol(Protocol):
 
     def read_status_counters(self) -> dict[str, int]: ...
 
+    def read_learning_metrics(self, horizon: str = "1M") -> dict[str, object]: ...
+
 
 def build_dashboard_view(
     repository: DashboardRepositoryProtocol,
@@ -13,6 +15,7 @@ def build_dashboard_view(
 ) -> dict[str, object]:
     recent_runs = repository.read_latest_runs(limit=limit)
     counters = repository.read_status_counters()
+    learning_metrics = repository.read_learning_metrics(horizon="1M")
 
     if recent_runs:
         latest = recent_runs[0]
@@ -26,5 +29,6 @@ def build_dashboard_view(
         "last_run_status": last_run_status,
         "last_run_time": last_run_time,
         "counters": counters,
+        "learning_metrics": learning_metrics,
         "recent_runs": recent_runs,
     }

@@ -98,6 +98,23 @@ def test_postgres_repository_writes_pipeline_rows_and_reads_counters():
     assert counters == {"raw_events": 3, "canonical_events": 2, "quarantine_events": 1}
 
 
+def test_postgres_repository_reads_learning_metrics_for_1m_horizon():
+    cursor = FakeCursor(fetch_one_rows=[(12, 0.5833, 0.0315)])
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    metrics = repo.read_learning_metrics(horizon="1M")
+
+    sql, params = cursor.executed[0]
+    assert "FROM realization_records rr" in sql
+    assert "JOIN forecast_records fr ON fr.id = rr.forecast_id" in sql
+    assert params == ("1M",)
+    assert metrics["horizon"] == "1M"
+    assert metrics["realized_count"] == 12
+    assert metrics["hit_rate"] == 0.5833
+    assert metrics["mean_abs_forecast_error"] == 0.0315
+
+
 def test_postgres_repository_writes_investment_thesis_and_returns_id():
     cursor = FakeCursor(fetch_one_rows=[("thesis-1",)])
     conn = FakeConnection(cursor)

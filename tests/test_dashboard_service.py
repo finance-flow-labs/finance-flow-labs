@@ -15,6 +15,14 @@ class FakeDashboardRepo:
     def read_status_counters(self):
         return {"raw_events": 100, "canonical_events": 90, "quarantine_events": 10}
 
+    def read_learning_metrics(self, horizon="1M"):
+        return {
+            "horizon": horizon,
+            "realized_count": 12,
+            "hit_rate": 0.58,
+            "mean_abs_forecast_error": 0.031,
+        }
+
 
 def test_dashboard_service_builds_operator_view_model():
     view = build_dashboard_view(FakeDashboardRepo())
@@ -22,4 +30,6 @@ def test_dashboard_service_builds_operator_view_model():
     assert view["last_run_status"] == "success"
     assert view["last_run_time"] == "2026-02-18T01:00:00Z"
     assert view["counters"]["raw_events"] == 100
+    assert view["learning_metrics"]["horizon"] == "1M"
+    assert view["learning_metrics"]["hit_rate"] == 0.58
     assert len(view["recent_runs"]) == 2
