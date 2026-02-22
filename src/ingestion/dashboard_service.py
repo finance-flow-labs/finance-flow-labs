@@ -1,3 +1,4 @@
+import json
 from collections import Counter
 from typing import Protocol
 
@@ -23,6 +24,41 @@ def _count_non_empty_evidence(value: object) -> bool:
     return value is not None
 
 
+def _parse_evidence_items(value: object) -> list[object]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        trimmed = value.strip()
+        if trimmed in {"", "[]", "null", "None"}:
+            return []
+        try:
+            parsed = json.loads(trimmed)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            return []
+    return []
+
+
+def _has_traceable_hard_evidence(value: object) -> bool:
+    for item in _parse_evidence_items(value):
+        if not isinstance(item, dict):
+            continue
+        source = str(item.get("source", "")).strip()
+        if source:
+            return True
+    return False
+
+
+def _safe_repo_call(default: object, fn: object, *args: object, **kwargs: object) -> object:
+    try:
+        if not callable(fn):
+            return default
+        return fn(*args, **kwargs)
+    except Exception:
+        return default
+
+
 def build_dashboard_view(
     repository: DashboardRepositoryProtocol,
     limit: int = 20,
@@ -37,6 +73,7 @@ def build_dashboard_view(
         "top_count": 0,
         "top_categories": [],
         "hard_evidence_coverage": None,
+        "hard_evidence_traceability_coverage": None,
         "soft_evidence_coverage": None,
         "evidence_gap_count": 0,
         "evidence_gap_coverage": None,
@@ -51,6 +88,7 @@ def build_dashboard_view(
                 "top_count": int(top.get("attribution_count", 0)),
                 "top_categories": category_stats,
                 "hard_evidence_coverage": None,
+                "hard_evidence_traceability_coverage": None,
                 "soft_evidence_coverage": None,
                 "evidence_gap_count": 0,
                 "evidence_gap_coverage": None,
@@ -80,6 +118,7 @@ def build_dashboard_view(
                 )
 
             hard_count = 0
+            traceable_hard_count = 0
             soft_count = 0
             evidence_gap_count = 0
             valid_rows = 0
@@ -88,9 +127,12 @@ def build_dashboard_view(
                     continue
                 valid_rows += 1
                 has_hard = _count_non_empty_evidence(row.get("evidence_hard"))
+                has_traceable_hard = _has_traceable_hard_evidence(row.get("evidence_hard"))
                 has_soft = _count_non_empty_evidence(row.get("evidence_soft"))
                 if has_hard:
                     hard_count += 1
+                if has_traceable_hard:
+                    traceable_hard_count += 1
                 if has_soft:
                     soft_count += 1
                 if not has_hard and not has_soft:
@@ -99,6 +141,9 @@ def build_dashboard_view(
             if valid_rows > 0:
                 attribution_summary["total"] = valid_rows
                 attribution_summary["hard_evidence_coverage"] = hard_count / valid_rows
+                attribution_summary["hard_evidence_traceability_coverage"] = (
+                    traceable_hard_count / valid_rows
+                )
                 attribution_summary["soft_evidence_coverage"] = soft_count / valid_rows
                 attribution_summary["evidence_gap_count"] = evidence_gap_count
                 attribution_summary["evidence_gap_coverage"] = evidence_gap_count / valid_rows
