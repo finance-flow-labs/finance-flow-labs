@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
+import time
 
 
 AUTH_WALL_HOST = "share.streamlit.io"
@@ -80,14 +81,12 @@ def _is_auth_wall_url(url: str) -> bool:
     return False
 
 
-def check_streamlit_access(
+def _check_streamlit_access_once(
     url: str,
     *,
-    timeout_seconds: float = 15,
-    fetch: Callable[[str, float], tuple[int | None, str, Mapping[str, str], str]] | None = None,
+    timeout_seconds: float,
+    fetch_fn: Callable[[str, float], tuple[int | None, str, Mapping[str, str], str]],
 ) -> AccessCheckResult:
-    fetch_fn = fetch or _default_fetch
-
     try:
         status_code, final_url, headers, body = fetch_fn(url, timeout_seconds)
     except URLError as exc:
@@ -132,3 +131,27 @@ def check_streamlit_access(
         auth_wall_redirect=False,
         reason="unexpected_response",
     )
+
+
+def check_streamlit_access(
+    url: str,
+    *,
+    timeout_seconds: float = 15,
+    fetch: Callable[[str, float], tuple[int | None, str, Mapping[str, str], str]] | None = None,
+    attempts: int = 3,
+    backoff_seconds: float = 0.5,
+) -> AccessCheckResult:
+    fetch_fn = fetch or _default_fetch
+    max_attempts = max(1, attempts)
+
+    for attempt in range(1, max_attempts + 1):
+        result = _check_streamlit_access_once(url, timeout_seconds=timeout_seconds, fetch_fn=fetch_fn)
+        should_retry = result.reason.startswith("network_error:") and attempt < max_attempts
+        if not should_retry:
+            return result
+
+        sleep_seconds = max(0.0, backoff_seconds) * attempt
+        if sleep_seconds > 0:
+            time.sleep(sleep_seconds)
+
+    return result
