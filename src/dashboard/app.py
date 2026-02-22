@@ -137,42 +137,42 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
     )
 
     horizon_rows: list[dict[str, object]] = []
-    learning_by_horizon = view.get("learning_metrics_by_horizon", {})
-    if isinstance(learning_by_horizon, Mapping):
-        for horizon in REQUIRED_LEARNING_HORIZONS:
-            row = learning_by_horizon.get(horizon)
-            if not isinstance(row, Mapping):
-                row = {}
-            row_forecast = to_int_metric(row.get("forecast_count"))
-            row_realized = to_int_metric(row.get("realized_count"))
-            row_coverage = to_pct_metric(row.get("realization_coverage"), precision=1)
-            row_hit_rate = to_pct_metric(row.get("hit_rate"), precision=1)
-            row_mae = to_pct_metric(row.get("mean_abs_forecast_error"), precision=2)
-            reliability_state = str(row.get("reliability_state", "insufficient"))
-            reliability_reason = str(row.get("reliability_reason", "missing_reliability_metadata"))
-            row_metrics = (row_forecast, row_realized, row_coverage, row_hit_rate, row_mae)
-            if any(metric["status"] == "error" for metric in row_metrics):
-                row_status = "error"
-            elif any(metric["status"] == "unknown" for metric in row_metrics):
-                row_status = "unknown"
-            elif reliability_state == "reliable":
-                row_status = "ok"
-            else:
-                row_status = "warn"
-            horizon_rows.append(
-                {
-                    "horizon": horizon,
-                    "forecast_count": row_forecast["value"],
-                    "realized_count": row_realized["value"],
-                    "coverage_pct": row_coverage["value"],
-                    "hit_rate_pct": row_hit_rate["value"],
-                    "mae_pct": row_mae["value"],
-                    "reliability": reliability_state,
-                    "reliability_reason": reliability_reason,
-                    "min_realized_required": row.get("min_realized_required"),
-                    "status": row_status,
-                }
-            )
+    learning_by_horizon_raw = view.get("learning_metrics_by_horizon", {})
+    learning_by_horizon = learning_by_horizon_raw if isinstance(learning_by_horizon_raw, Mapping) else {}
+    for horizon in REQUIRED_LEARNING_HORIZONS:
+        row = learning_by_horizon.get(horizon)
+        if not isinstance(row, Mapping):
+            row = {}
+        row_forecast = to_int_metric(row.get("forecast_count"))
+        row_realized = to_int_metric(row.get("realized_count"))
+        row_coverage = to_pct_metric(row.get("realization_coverage"), precision=1)
+        row_hit_rate = to_pct_metric(row.get("hit_rate"), precision=1)
+        row_mae = to_pct_metric(row.get("mean_abs_forecast_error"), precision=2)
+        reliability_state = str(row.get("reliability_state", "insufficient"))
+        reliability_reason = str(row.get("reliability_reason", "missing_reliability_metadata"))
+        row_metrics = (row_forecast, row_realized, row_coverage, row_hit_rate, row_mae)
+        if any(metric["status"] == "error" for metric in row_metrics):
+            row_status = "error"
+        elif any(metric["status"] == "unknown" for metric in row_metrics):
+            row_status = "unknown"
+        elif reliability_state == "reliable":
+            row_status = "ok"
+        else:
+            row_status = "warn"
+        horizon_rows.append(
+            {
+                "horizon": horizon,
+                "forecast_count": row_forecast["value"],
+                "realized_count": row_realized["value"],
+                "coverage_pct": row_coverage["value"],
+                "hit_rate_pct": row_hit_rate["value"],
+                "mae_pct": row_mae["value"],
+                "reliability": reliability_state,
+                "reliability_reason": reliability_reason,
+                "min_realized_required": row.get("min_realized_required"),
+                "status": row_status,
+            }
+        )
 
     has_horizon_alert = any(row.get("status") != "ok" for row in horizon_rows)
     primary_horizon_row = next((row for row in horizon_rows if row.get("horizon") == "1M"), None)
