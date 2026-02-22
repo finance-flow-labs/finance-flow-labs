@@ -466,6 +466,37 @@ class PostgresRepository:
         conn.close()
         return [dict(zip(columns, row)) for row in rows]
 
+    def read_forecast_error_category_stats(
+        self,
+        horizon: str = "1M",
+        limit: int = 20,
+    ) -> list[dict[str, object]]:
+        """Aggregate attribution categories for forecast-error learning automation."""
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                fea.category,
+                COUNT(*) AS attribution_count,
+                AVG(fea.contribution) AS mean_contribution,
+                AVG(ABS(fea.contribution)) AS mean_abs_contribution
+            FROM forecast_error_attributions fea
+            JOIN realization_records rr ON rr.id = fea.realization_id
+            JOIN forecast_records fr ON fr.id = rr.forecast_id
+            WHERE fr.horizon = %s
+            GROUP BY fea.category
+            ORDER BY attribution_count DESC, fea.category ASC
+            LIMIT %s
+            """,
+            (horizon, limit),
+        )
+        rows = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        cursor.close()
+        conn.close()
+        return [dict(zip(columns, row)) for row in rows]
+
     def write_raw(self, row: Mapping[str, object]) -> None:
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()
