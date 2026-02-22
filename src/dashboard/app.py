@@ -4,7 +4,7 @@ from collections.abc import Mapping
 
 
 def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
-    def to_int(value: object) -> int:
+    def to_int(value: object) -> int | None:
         if isinstance(value, bool):
             return int(value)
         if isinstance(value, int):
@@ -18,8 +18,8 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
                 try:
                     return int(float(value))
                 except ValueError:
-                    return 0
-        return 0
+                    return None
+        return None
 
     def to_float(value: object) -> float | None:
         if isinstance(value, bool):
@@ -104,22 +104,22 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
     return {
         "last_run_status": str(view.get("last_run_status", "no-data")),
         "last_run_time": str(view.get("last_run_time", "")),
-        "raw_events": raw_events,
-        "canonical_events": canonical_events,
-        "quarantine_events": quarantine_events,
-        "forecast_count": forecast_count,
-        "realized_count": realized_count,
+        "raw_events": "n/a" if raw_events is None else raw_events,
+        "canonical_events": "n/a" if canonical_events is None else canonical_events,
+        "quarantine_events": "n/a" if quarantine_events is None else quarantine_events,
+        "forecast_count": "n/a" if forecast_count is None else forecast_count,
+        "realized_count": "n/a" if realized_count is None else realized_count,
         "coverage_pct": coverage_pct,
         "hit_rate_pct": hit_rate_pct,
         "mae_pct": mae_pct,
         "signed_error_pct": signed_error_pct,
-        "attribution_total": attribution_total,
+        "attribution_total": "n/a" if attribution_total is None else attribution_total,
         "attribution_top_category": top_category,
-        "attribution_top_count": top_count,
+        "attribution_top_count": "n/a" if top_count is None else top_count,
         "hard_evidence_pct": hard_evidence_pct,
         "hard_evidence_traceability_pct": hard_evidence_traceability_pct,
         "soft_evidence_pct": soft_evidence_pct,
-        "evidence_gap_count": evidence_gap_count,
+        "evidence_gap_count": "n/a" if evidence_gap_count is None else evidence_gap_count,
         "evidence_gap_pct": evidence_gap_pct,
     }
 
