@@ -668,14 +668,15 @@ class PostgresRepository:
             SELECT
                 COUNT(*) AS realized_count,
                 AVG(CASE WHEN rr.hit THEN 1.0 ELSE 0.0 END) AS hit_rate,
-                AVG(ABS(rr.forecast_error)) AS mean_abs_forecast_error
+                AVG(ABS(rr.forecast_error)) AS mean_abs_forecast_error,
+                AVG(rr.forecast_error) AS mean_signed_forecast_error
             FROM realization_records rr
             JOIN forecast_records fr ON fr.id = rr.forecast_id
             WHERE fr.horizon = %s
             """,
             (horizon,),
         )
-        row = cursor.fetchone() or (0, None, None)
+        row = cursor.fetchone() or (0, None, None, None)
 
         cursor.close()
         conn.close()
@@ -716,6 +717,7 @@ class PostgresRepository:
             "realization_coverage": realization_coverage,
             "hit_rate": to_float_or_none(row[1]),
             "mean_abs_forecast_error": to_float_or_none(row[2]),
+            "mean_signed_forecast_error": to_float_or_none(row[3]),
         }
 
     def write_macro_series_points(self, points: list[NormalizedSeriesPoint]) -> int:

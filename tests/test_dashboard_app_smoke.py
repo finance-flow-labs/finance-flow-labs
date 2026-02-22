@@ -25,6 +25,7 @@ def test_dashboard_app_builds_cards_from_view_model():
                 "realization_coverage": 0.4,
                 "hit_rate": 0.6,
                 "mean_abs_forecast_error": 0.025,
+                "mean_signed_forecast_error": -0.007,
             },
             "attribution_summary": {
                 "total": 7,
@@ -48,6 +49,7 @@ def test_dashboard_app_builds_cards_from_view_model():
     assert cards["coverage_pct"] == "40.0%"
     assert cards["hit_rate_pct"] == "60.0%"
     assert cards["mae_pct"] == "2.50%"
+    assert cards["signed_error_pct"] == "-0.70%"
     assert cards["attribution_total"] == 7
     assert cards["attribution_top_category"] == "macro_miss"
     assert cards["attribution_top_count"] == 3

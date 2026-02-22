@@ -99,7 +99,7 @@ def test_postgres_repository_writes_pipeline_rows_and_reads_counters():
 
 
 def test_postgres_repository_reads_learning_metrics_for_1m_horizon():
-    cursor = FakeCursor(fetch_one_rows=[(20,), (12, 0.5833, 0.0315)])
+    cursor = FakeCursor(fetch_one_rows=[(20,), (12, 0.5833, 0.0315, -0.0042)])
     conn = FakeConnection(cursor)
     repo = PostgresRepository(connection_factory=lambda: conn)
 
@@ -119,6 +119,7 @@ def test_postgres_repository_reads_learning_metrics_for_1m_horizon():
     assert metrics["realization_coverage"] == 0.6
     assert metrics["hit_rate"] == 0.5833
     assert metrics["mean_abs_forecast_error"] == 0.0315
+    assert metrics["mean_signed_forecast_error"] == -0.0042
 
 
 def test_postgres_repository_writes_investment_thesis_and_returns_id():
