@@ -369,11 +369,15 @@ def test_dashboard_service_surfaces_deployed_access_from_env(monkeypatch: pytest
         "STREAMLIT_ACCESS_CHECK_JSON",
         '{"ok": false, "reason": "auth_wall_redirect_detected", "auth_wall_redirect": true, "checked_at": "2026-02-22T15:00:00Z", "remediation_hint": "set app public"}',
     )
+    monkeypatch.setenv("DEPLOY_ACCESS_MODE", "restricted")
+    monkeypatch.setenv("DEPLOY_RESTRICTED_LOGIN_PATH", "https://share.streamlit.io/login")
 
     view = build_dashboard_view(FakeDashboardRepo())
     assert view["deployed_access"]["status"] == "degraded"
     assert view["deployed_access"]["reason"] == "auth_wall_redirect_detected"
     assert view["deployed_access"]["checked_at"] == "2026-02-22T15:00:00Z"
+    assert view["deployed_access"]["deploy_access_mode"] == "restricted"
+    assert view["deployed_access"]["restricted_login_path"] == "https://share.streamlit.io/login"
 
 
 def test_dashboard_service_marks_ok_access_as_stale_when_check_too_old(monkeypatch: pytest.MonkeyPatch):

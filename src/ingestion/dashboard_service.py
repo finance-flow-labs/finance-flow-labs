@@ -267,19 +267,28 @@ def _normalize_deployed_access_status(payload: object) -> dict[str, object]:
 
 
 def _load_deployed_access_status() -> dict[str, object]:
+    access_mode = os.getenv("DEPLOY_ACCESS_MODE", "public").strip().lower() or "public"
+    restricted_login_path = os.getenv("DEPLOY_RESTRICTED_LOGIN_PATH")
+
     raw_json = os.getenv("STREAMLIT_ACCESS_CHECK_JSON")
     if raw_json is None or raw_json.strip() == "":
-        return dict(DEFAULT_DEPLOYED_ACCESS_STATUS)
-    try:
-        payload = json.loads(raw_json)
-    except json.JSONDecodeError:
-        return {
-            "status": "unknown",
-            "reason": "invalid_access_check_json",
-            "checked_at": None,
-            "remediation_hint": "Set STREAMLIT_ACCESS_CHECK_JSON to valid JSON from streamlit-access-check output.",
-        }
-    return _normalize_deployed_access_status(payload)
+        base = dict(DEFAULT_DEPLOYED_ACCESS_STATUS)
+    else:
+        try:
+            payload = json.loads(raw_json)
+        except json.JSONDecodeError:
+            base = {
+                "status": "unknown",
+                "reason": "invalid_access_check_json",
+                "checked_at": None,
+                "remediation_hint": "Set STREAMLIT_ACCESS_CHECK_JSON to valid JSON from streamlit-access-check output.",
+            }
+        else:
+            base = _normalize_deployed_access_status(payload)
+
+    base["deploy_access_mode"] = access_mode
+    base["restricted_login_path"] = restricted_login_path
+    return base
 
 def _reliability_thresholds() -> dict[str, object]:
     min_realized_by_horizon = {
