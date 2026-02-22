@@ -58,9 +58,10 @@ def test_dashboard_app_builds_cards_from_view_model():
     assert cards["soft_evidence_pct"] == "57.0%"
     assert cards["evidence_gap_count"] == 1
     assert cards["evidence_gap_pct"] == "14.0%"
+    assert cards["has_critical_metric_alert"] is False
 
 
-def test_dashboard_app_treats_malformed_count_metrics_as_unknown():
+def test_dashboard_app_treats_malformed_count_metrics_as_unknown_or_error():
     cards = dashboard_app.build_operator_cards(
         {
             "counters": {
@@ -88,6 +89,9 @@ def test_dashboard_app_treats_malformed_count_metrics_as_unknown():
     assert cards["attribution_total"] == "n/a"
     assert cards["attribution_top_count"] == "n/a"
     assert cards["evidence_gap_count"] == "n/a"
+    assert cards["metric_status"]["raw_events"]["status"] == "unknown"
+    assert cards["metric_status"]["attribution_total"]["status"] == "error"
+    assert cards["has_critical_metric_alert"] is True
 
 
 def test_dashboard_app_parses_numeric_strings_for_percent_metrics():
@@ -116,3 +120,32 @@ def test_dashboard_app_parses_numeric_strings_for_percent_metrics():
     assert cards["hard_evidence_traceability_pct"] == "71.0%"
     assert cards["soft_evidence_pct"] == "57.0%"
     assert cards["evidence_gap_pct"] == "14.0%"
+
+
+def test_dashboard_app_keeps_true_zero_values_as_ok_not_unknown():
+    cards = dashboard_app.build_operator_cards(
+        {
+            "counters": {
+                "raw_events": "0",
+                "canonical_events": 0,
+                "quarantine_events": 0.0,
+            },
+            "learning_metrics": {
+                "forecast_count": "0",
+                "realized_count": 0,
+                "realization_coverage": "0",
+                "hit_rate": 0,
+            },
+            "attribution_summary": {
+                "total": "0",
+                "hard_evidence_coverage": "0",
+                "hard_evidence_traceability_coverage": "0",
+                "evidence_gap_count": 0,
+            },
+        }
+    )
+
+    assert cards["raw_events"] == 0
+    assert cards["coverage_pct"] == "0.0%"
+    assert cards["metric_status"]["raw_events"]["status"] == "ok"
+    assert cards["metric_status"]["coverage_pct"]["status"] == "ok"
