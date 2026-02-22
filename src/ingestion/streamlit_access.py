@@ -34,6 +34,19 @@ class AccessCheckResult:
             return "critical"
         return "warning"
 
+    @property
+    def remediation_hint(self) -> str | None:
+        if self.ok:
+            return None
+        if self.auth_wall_redirect:
+            return (
+                "auth_wall_detected: verify Streamlit Community Cloud visibility is set to Public "
+                "(or document restricted-mode operator login path), then redeploy and rerun streamlit-access-check"
+            )
+        if self.reason.startswith("network_error:"):
+            return "network_error: rerun with retries/backoff and confirm endpoint/network health"
+        return "unexpected_response: verify dashboard shell is reachable and Streamlit app is serving expected HTML"
+
     def to_dict(self) -> dict[str, object]:
         return {
             "ok": self.ok,
@@ -43,6 +56,7 @@ class AccessCheckResult:
             "reason": self.reason,
             "alert": self.alert,
             "alert_severity": self.alert_severity,
+            "remediation_hint": self.remediation_hint,
         }
 
 

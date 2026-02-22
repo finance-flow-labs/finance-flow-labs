@@ -134,6 +134,7 @@ python3 -m src.ingestion.cli streamlit-access-check --url https://finance-flow-l
 Expected behavior:
 - Exit code `0`: app shell reachable and no Streamlit auth-wall redirect detected.
 - Exit code `2`: access contract broken (e.g., redirected to `https://share.streamlit.io/-/auth/app`).
+- JSON output includes `remediation_hint` for non-OK results to guide immediate operator action.
 
 Operational response when check fails:
 1. Verify Streamlit app visibility/access policy in deployment settings.
