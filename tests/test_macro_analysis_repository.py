@@ -56,6 +56,8 @@ def test_postgres_repository_writes_macro_analysis_result():
             "reason_codes": ["cpi_cooling", "rate_plateau"],
             "risk_flags": ["data_gap"],
             "triggers": ["next_cpi", "fomc_minutes"],
+            "evidence_hard": [{"source": "fred", "series": "CPIAUCSL"}],
+            "evidence_soft": [{"source": "news", "title": "Soft landing odds rise"}],
             "narrative": "Macro conditions are mixed with a slight slowdown bias.",
             "model": "gpt-5.3-codex",
         }
@@ -67,6 +69,8 @@ def test_postgres_repository_writes_macro_analysis_result():
     assert cursor.executed[0][1][0] == "run-1"
     assert cursor.executed[0][1][7] == "policy hold then cuts"
     assert cursor.executed[0][1][8] == "both sides underweight liquidity"
+    assert '"CPIAUCSL"' in cursor.executed[0][1][12]
+    assert '"Soft landing odds rise"' in cursor.executed[0][1][13]
     assert conn.committed is True
 
 
@@ -94,6 +98,8 @@ def test_postgres_repository_writes_macro_analysis_result_with_optional_fields_d
 
     assert cursor.executed[0][1][7] == ""
     assert cursor.executed[0][1][8] == ""
+    assert cursor.executed[0][1][12] == "[]"
+    assert cursor.executed[0][1][13] == "[]"
 
 
 def test_postgres_repository_reads_latest_macro_analysis():
@@ -112,6 +118,8 @@ def test_postgres_repository_reads_latest_macro_analysis():
                 ["cpi_cooling"],
                 ["data_gap"],
                 ["next_cpi"],
+                [{"source": "fred", "series": "CPIAUCSL"}],
+                [{"source": "news", "title": "Soft landing odds rise"}],
                 "narrative text",
                 "gpt-5.3-codex",
                 "2026-02-18T00:01:00+00:00",
@@ -130,6 +138,8 @@ def test_postgres_repository_reads_latest_macro_analysis():
             "reason_codes",
             "risk_flags",
             "triggers",
+            "evidence_hard",
+            "evidence_soft",
             "narrative",
             "model",
             "created_at",
@@ -145,3 +155,5 @@ def test_postgres_repository_reads_latest_macro_analysis():
     assert rows[0]["regime"] == "neutral"
     assert rows[0]["policy_case"] == "policy hold then cuts"
     assert rows[0]["critic_case"] == "both sides underweight liquidity"
+    assert rows[0]["evidence_hard"][0]["series"] == "CPIAUCSL"
+    assert rows[0]["evidence_soft"][0]["source"] == "news"
