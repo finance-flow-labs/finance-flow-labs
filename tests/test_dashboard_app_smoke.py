@@ -379,3 +379,25 @@ def test_dashboard_app_marks_non_finite_numbers_as_error_not_crash():
     assert cards["hard_evidence_pct"] == "n/a"
     assert cards["metric_status"]["raw_events"]["status"] == "error"
     assert cards["metric_status"]["coverage_pct"]["reason"] == "non_finite_numeric"
+
+
+def test_dashboard_app_flags_deployed_access_incident_when_degraded():
+    cards = dashboard_app.build_operator_cards(
+        {
+            "deployed_access": {
+                "status": "degraded",
+                "reason": "auth_wall_redirect_detected",
+                "checked_at": "2026-02-22T15:00:00Z",
+                "remediation_hint": "set app public",
+            }
+        }
+    )
+
+    assert cards["has_deployed_access_alert"] is True
+    assert cards["deployed_access"]["reason"] == "auth_wall_redirect_detected"
+
+
+def test_dashboard_app_keeps_deployed_access_alert_off_when_status_ok():
+    cards = dashboard_app.build_operator_cards({"deployed_access": {"status": "ok"}})
+
+    assert cards["has_deployed_access_alert"] is False

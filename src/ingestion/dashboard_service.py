@@ -9,6 +9,12 @@ REQUIRED_LEARNING_HORIZONS: tuple[str, ...] = ("1W", "1M", "3M")
 DEFAULT_MIN_REALIZED_BY_HORIZON: dict[str, int] = {"1W": 8, "1M": 12, "3M": 6}
 DEFAULT_COVERAGE_FLOOR: float = 0.4
 DEFAULT_BENCHMARK_MAX_STALE_DAYS: int = 7
+DEFAULT_DEPLOYED_ACCESS_STATUS: dict[str, object] = {
+    "status": "unknown",
+    "reason": "access_check_unavailable",
+    "checked_at": None,
+    "remediation_hint": None,
+}
 POLICY_CHECK_BENCHMARK_KEYS: tuple[str, ...] = ("QQQ", "KOSPI200", "BTC", "SGOV")
 POLICY_UNIVERSE_REGION_SENTINELS: dict[str, tuple[str, ...]] = {
     "US": ("QQQ",),
@@ -197,6 +203,55 @@ def _float_env(name: str, default: float) -> float:
     except ValueError:
         return default
 
+
+
+
+def _normalize_deployed_access_status(payload: object) -> dict[str, object]:
+    if not isinstance(payload, dict):
+        return dict(DEFAULT_DEPLOYED_ACCESS_STATUS)
+
+    status_raw = str(payload.get("status", "")).strip().upper()
+    if status_raw in {"OK", "HEALTHY"}:
+        status = "ok"
+    elif status_raw in {"DEGRADED", "AUTH_WALL", "CRITICAL"}:
+        status = "degraded"
+    elif status_raw:
+        status = status_raw.lower()
+    else:
+        ok_flag = payload.get("ok")
+        auth_wall = payload.get("auth_wall_redirect")
+        if ok_flag is True:
+            status = "ok"
+        elif auth_wall is True:
+            status = "degraded"
+        else:
+            status = "unknown"
+
+    checked_at = payload.get("checked_at") or payload.get("as_of")
+    reason = payload.get("reason")
+    remediation_hint = payload.get("remediation_hint")
+    return {
+        "status": status,
+        "reason": str(reason) if reason is not None else "access_check_unavailable",
+        "checked_at": str(checked_at) if checked_at is not None else None,
+        "remediation_hint": str(remediation_hint) if remediation_hint is not None else None,
+    }
+
+
+def _load_deployed_access_status() -> dict[str, object]:
+    raw_json = os.getenv("STREAMLIT_ACCESS_CHECK_JSON")
+    if raw_json is None or raw_json.strip() == "":
+        return dict(DEFAULT_DEPLOYED_ACCESS_STATUS)
+    try:
+        payload = json.loads(raw_json)
+    except json.JSONDecodeError:
+        return {
+            "status": "unknown",
+            "reason": "invalid_access_check_json",
+            "checked_at": None,
+            "remediation_hint": "Set STREAMLIT_ACCESS_CHECK_JSON to valid JSON from streamlit-access-check output.",
+        }
+    return _normalize_deployed_access_status(payload)
 
 def _reliability_thresholds() -> dict[str, object]:
     min_realized_by_horizon = {
@@ -789,5 +844,6 @@ def build_dashboard_view(
             learning_metrics_by_horizon=learning_metrics_by_horizon,
             latest_run_time=last_run_time or None,
         ),
+        "deployed_access": _load_deployed_access_status(),
         "recent_runs": recent_runs,
     }

@@ -344,6 +344,12 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         "learning_metrics_panel": horizon_rows,
         "policy_compliance_panel": policy_compliance_panel,
         "policy_compliance_summary": dict(policy_summary),
+        "deployed_access": view.get("deployed_access", {}),
+        "has_deployed_access_alert": (
+            isinstance(view.get("deployed_access"), Mapping)
+            and str(view.get("deployed_access", {}).get("status", "unknown")).lower()
+            in {"degraded", "auth_wall", "critical"}
+        ),
     }
 
 
@@ -416,6 +422,20 @@ def run_streamlit_app(dsn: str) -> None:
     if cards.get("has_primary_horizon_reliability_alert"):
         st.warning(
             "Primary horizon (1M) learning metrics are not yet statistically reliable; treat KPI changes as directional only."
+        )
+
+    deployed_access = cards.get("deployed_access", {})
+    if cards.get("has_deployed_access_alert") and isinstance(deployed_access, Mapping):
+        status = str(deployed_access.get("status", "degraded")).upper()
+        reason = str(deployed_access.get("reason", "unknown"))
+        checked_at = deployed_access.get("checked_at") or "n/a"
+        remediation_hint = deployed_access.get("remediation_hint") or "Check Streamlit public visibility and rerun access smoke check."
+        st.error(
+            f"Deployed accessibility incident ({status}) · reason={reason} · checked_at={checked_at}\n"
+            f"Next step: {remediation_hint}"
+        )
+        st.info(
+            "Degraded mode: dashboard insights may be incomplete. Execution policy remains paper-trade auto / real-trade manual approval."
         )
 
     if cards.get("forecast_count") == 0:
