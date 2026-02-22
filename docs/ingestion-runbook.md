@@ -97,7 +97,7 @@ Validation guardrails:
     - each row includes a human-readable reliability reason to prevent over-trusting sparse KPI samples
   - recent run history
   - policy compliance block (PASS/WARN/FAIL/UNKNOWN):
-    - Universe coverage (US/KR/Crypto): currently validated via ingestion presence; region-level tagging dependency surfaced in evidence
+    - Universe coverage (US/KR/Crypto): requires region-aware HARD evidence by policy region (US/KR/CRYPTO); panel surfaces per-region evidence counts + metadata completeness ratio + evaluation `as_of`
     - Crypto sleeve composition (BTC/ETH >=70%, alts <=30%): `UNKNOWN` until portfolio sleeve exposure feed exists
     - Leverage sleeve cap (<=20%): `UNKNOWN` until portfolio leverage exposure feed exists
     - Primary horizon readiness (1M): mapped from reliability state (`reliable`→PASS, `low_sample`→WARN, `insufficient`→FAIL)

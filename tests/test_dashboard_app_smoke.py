@@ -328,6 +328,35 @@ def test_dashboard_app_uses_policy_compliance_payload_when_present():
     assert cards["policy_compliance_summary"]["fail"] == 1
 
 
+def test_dashboard_app_policy_panel_surfaces_universe_region_evidence_columns():
+    cards = dashboard_app.build_operator_cards(
+        {
+            "policy_compliance": {
+                "checks": [
+                    {
+                        "check": "Universe coverage (US/KR/Crypto)",
+                        "status": "WARN",
+                        "reason": "Ingest data exists but region-aware coverage evidence is incomplete: KR",
+                        "as_of": "2026-02-22T11:20:00Z",
+                        "evidence": {
+                            "region_coverage_counts": {"US": 1, "KR": 0, "CRYPTO": 1},
+                            "region_metadata_completeness": 2 / 3,
+                        },
+                    }
+                ],
+                "summary": {"total": 1, "pass": 0, "warn": 1, "fail": 0, "unknown": 0},
+            }
+        }
+    )
+
+    row = cards["policy_compliance_panel"][0]
+    assert row["us_coverage_count"] == 1
+    assert row["kr_coverage_count"] == 0
+    assert row["crypto_coverage_count"] == 1
+    assert row["region_metadata_completeness"] == "66.7%"
+    assert row["evaluation_window_as_of"] == "2026-02-22T11:20:00Z"
+
+
 def test_dashboard_app_marks_non_finite_numbers_as_error_not_crash():
     cards = dashboard_app.build_operator_cards(
         {
