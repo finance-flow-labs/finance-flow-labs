@@ -18,7 +18,9 @@ class FakeDashboardRepo:
     def read_learning_metrics(self, horizon="1M"):
         return {
             "horizon": horizon,
+            "forecast_count": 20,
             "realized_count": 12,
+            "realization_coverage": 0.6,
             "hit_rate": 0.58,
             "mean_abs_forecast_error": 0.031,
         }

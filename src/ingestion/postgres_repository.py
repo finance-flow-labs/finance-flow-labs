@@ -594,6 +594,17 @@ class PostgresRepository:
         cursor.execute(
             """
             SELECT
+                COUNT(*) AS forecast_count
+            FROM forecast_records
+            WHERE horizon = %s
+            """,
+            (horizon,),
+        )
+        forecast_row = cursor.fetchone() or (0,)
+
+        cursor.execute(
+            """
+            SELECT
                 COUNT(*) AS realized_count,
                 AVG(CASE WHEN rr.hit THEN 1.0 ELSE 0.0 END) AS hit_rate,
                 AVG(ABS(rr.forecast_error)) AS mean_abs_forecast_error
@@ -630,9 +641,18 @@ class PostgresRepository:
                 return float(value)
             return None
 
+        forecast_count = to_int(forecast_row[0])
+        realized_count = to_int(row[0])
+
+        realization_coverage = None
+        if forecast_count > 0:
+            realization_coverage = realized_count / forecast_count
+
         return {
             "horizon": horizon,
-            "realized_count": to_int(row[0]),
+            "forecast_count": forecast_count,
+            "realized_count": realized_count,
+            "realization_coverage": realization_coverage,
             "hit_rate": to_float_or_none(row[1]),
             "mean_abs_forecast_error": to_float_or_none(row[2]),
         }
