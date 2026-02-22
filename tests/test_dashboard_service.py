@@ -1,4 +1,5 @@
 import importlib
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -398,6 +399,19 @@ def test_dashboard_service_requires_checked_at_for_ok_access_payload(monkeypatch
     view = build_dashboard_view(FakeDashboardRepo())
     assert view["deployed_access"]["status"] == "unknown"
     assert view["deployed_access"]["reason"] == "access_check_missing_checked_at"
+
+
+def test_dashboard_service_marks_future_timestamp_access_check_unknown(monkeypatch: pytest.MonkeyPatch):
+    future_checked_at = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat().replace("+00:00", "Z")
+    monkeypatch.setenv(
+        "STREAMLIT_ACCESS_CHECK_JSON",
+        f'{{"ok": true, "checked_at": "{future_checked_at}"}}',
+    )
+
+    view = build_dashboard_view(FakeDashboardRepo())
+    assert view["deployed_access"]["status"] == "unknown"
+    assert view["deployed_access"]["reason"] == "access_check_future_timestamp:>5m"
+    assert view["deployed_access"]["is_future_skew"] is True
 
 
 def test_dashboard_service_sets_unknown_when_access_json_invalid(monkeypatch: pytest.MonkeyPatch):

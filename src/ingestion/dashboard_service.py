@@ -10,6 +10,7 @@ DEFAULT_MIN_REALIZED_BY_HORIZON: dict[str, int] = {"1W": 8, "1M": 12, "3M": 6}
 DEFAULT_COVERAGE_FLOOR: float = 0.4
 DEFAULT_BENCHMARK_MAX_STALE_DAYS: int = 7
 DEFAULT_DEPLOYED_ACCESS_MAX_STALE_HOURS: int = 24
+DEFAULT_DEPLOYED_ACCESS_FUTURE_SKEW_MINUTES: int = 5
 DEFAULT_DEPLOYED_ACCESS_STATUS: dict[str, object] = {
     "status": "unknown",
     "reason": "access_check_unavailable",
@@ -234,11 +235,18 @@ def _normalize_deployed_access_status(payload: object) -> dict[str, object]:
 
     checked_at_str = str(checked_at) if checked_at is not None else None
     checked_at_dt = _parse_iso_utc(checked_at_str)
+    now_utc = datetime.now(timezone.utc)
     max_stale_hours = _int_env("STREAMLIT_ACCESS_MAX_STALE_HOURS", DEFAULT_DEPLOYED_ACCESS_MAX_STALE_HOURS)
+    future_skew_minutes = _int_env(
+        "STREAMLIT_ACCESS_FUTURE_SKEW_MINUTES", DEFAULT_DEPLOYED_ACCESS_FUTURE_SKEW_MINUTES
+    )
     stale_age_hours: float | None = None
     is_stale = False
+    is_future_skew = False
     if checked_at_dt is not None:
-        stale_age_hours = max(0.0, (datetime.now(timezone.utc) - checked_at_dt).total_seconds() / 3600.0)
+        delta_seconds = (now_utc - checked_at_dt).total_seconds()
+        is_future_skew = delta_seconds < -(future_skew_minutes * 60)
+        stale_age_hours = max(0.0, delta_seconds / 3600.0)
         is_stale = stale_age_hours >= float(max_stale_hours)
 
     normalized_reason = str(reason) if reason is not None else "access_check_unavailable"
@@ -250,6 +258,11 @@ def _normalize_deployed_access_status(payload: object) -> dict[str, object]:
             normalized_reason = "access_check_missing_checked_at"
             if normalized_remediation_hint is None:
                 normalized_remediation_hint = "Provide checked_at/as_of in STREAMLIT_ACCESS_CHECK_JSON for freshness validation."
+        elif is_future_skew:
+            status = "unknown"
+            normalized_reason = f"access_check_future_timestamp:>{future_skew_minutes}m"
+            if normalized_remediation_hint is None:
+                normalized_remediation_hint = "Verify system clock and regenerate STREAMLIT_ACCESS_CHECK_JSON with UTC checked_at."
         elif is_stale:
             status = "degraded"
             normalized_reason = f"access_check_stale:{stale_age_hours:.1f}h>={max_stale_hours}h"
@@ -262,6 +275,7 @@ def _normalize_deployed_access_status(payload: object) -> dict[str, object]:
         "checked_at": checked_at_str,
         "remediation_hint": normalized_remediation_hint,
         "is_stale": is_stale,
+        "is_future_skew": is_future_skew,
         "stale_age_hours": stale_age_hours,
     }
 
