@@ -426,6 +426,16 @@ def run_streamlit_app(dsn: str) -> None:
         )
 
     deployed_access = cards.get("deployed_access", {})
+    if isinstance(deployed_access, Mapping):
+        deploy_access_mode = str(deployed_access.get("deploy_access_mode", "public")).lower()
+        restricted_login_path = deployed_access.get("restricted_login_path")
+        if deploy_access_mode == "restricted":
+            login_hint = restricted_login_path or "(not configured)"
+            st.info(
+                "Restricted access mode is active for this deployment. "
+                f"Operator login path: {login_hint}"
+            )
+
     if cards.get("has_deployed_access_alert") and isinstance(deployed_access, Mapping):
         status = str(deployed_access.get("status", "degraded")).upper()
         reason = str(deployed_access.get("reason", "unknown"))

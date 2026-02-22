@@ -181,3 +181,7 @@ Rollback steps (when a recent deployment introduced auth-wall regression):
   - if the script exits non-zero in deploy/ops automation, treat it as **critical access regression** and page operator.
 - Alert clear rule:
   - close alert only after one clean rerun (`exit 0`) from a fresh session and visibility mode verification.
+- Structured payload capture for CI audit:
+  - Set `OUTPUT_JSON_PATH` to persist gate output JSON while keeping stdout logs.
+  - Example: `OUTPUT_JSON_PATH=deploy_access_gate.json ./scripts/streamlit_access_smoke_check.sh`
+  - Use captured payload fields for operator audit (`access_check.reason`, `access_check.alert_severity`, `access_check.remediation_hint`).
