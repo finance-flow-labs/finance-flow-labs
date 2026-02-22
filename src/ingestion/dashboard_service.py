@@ -66,6 +66,18 @@ def _safe_repo_call(default: object, fn: object, *args: object, **kwargs: object
         return default
 
 
+def _default_learning_metrics(horizon: str) -> dict[str, object]:
+    return {
+        "horizon": horizon,
+        "forecast_count": 0,
+        "realized_count": 0,
+        "realization_coverage": None,
+        "hit_rate": None,
+        "mean_abs_forecast_error": None,
+        "mean_signed_forecast_error": None,
+    }
+
+
 def build_dashboard_view(
     repository: DashboardRepositoryProtocol,
     limit: int = 20,
@@ -75,19 +87,16 @@ def build_dashboard_view(
         {"raw_events": 0, "canonical_events": 0, "quarantine_events": 0},
         repository.read_status_counters,
     )
-    learning_metrics = _safe_repo_call(
-        {
-            "horizon": "1M",
-            "forecast_count": 0,
-            "realized_count": 0,
-            "realization_coverage": None,
-            "hit_rate": None,
-            "mean_abs_forecast_error": None,
-            "mean_signed_forecast_error": None,
-        },
-        repository.read_learning_metrics,
-        horizon="1M",
-    )
+    tracked_horizons = ("1W", "1M", "3M")
+    learning_metrics_by_horizon = {
+        horizon: _safe_repo_call(
+            _default_learning_metrics(horizon),
+            repository.read_learning_metrics,
+            horizon=horizon,
+        )
+        for horizon in tracked_horizons
+    }
+    learning_metrics = learning_metrics_by_horizon["1M"]
 
     attribution_summary = {
         "total": 0,
@@ -197,6 +206,7 @@ def build_dashboard_view(
         "last_run_time": last_run_time,
         "counters": counters,
         "learning_metrics": learning_metrics,
+        "learning_metrics_by_horizon": learning_metrics_by_horizon,
         "attribution_summary": attribution_summary,
         "recent_runs": recent_runs,
     }

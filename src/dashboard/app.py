@@ -135,12 +135,42 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         metrics[key]["status"] in {"unknown", "error"} for key in CRITICAL_METRIC_KEYS
     )
 
+    horizon_rows: list[dict[str, object]] = []
+    learning_by_horizon = view.get("learning_metrics_by_horizon", {})
+    if isinstance(learning_by_horizon, Mapping):
+        for horizon in ("1W", "1M", "3M"):
+            row = learning_by_horizon.get(horizon)
+            if not isinstance(row, Mapping):
+                continue
+            row_forecast = to_int_metric(row.get("forecast_count"))
+            row_realized = to_int_metric(row.get("realized_count"))
+            row_coverage = to_pct_metric(row.get("realization_coverage"), precision=1)
+            row_hit_rate = to_pct_metric(row.get("hit_rate"), precision=1)
+            row_mae = to_pct_metric(row.get("mean_abs_forecast_error"), precision=2)
+            horizon_rows.append(
+                {
+                    "horizon": horizon,
+                    "forecast_count": row_forecast["value"],
+                    "realized_count": row_realized["value"],
+                    "coverage_pct": row_coverage["value"],
+                    "hit_rate_pct": row_hit_rate["value"],
+                    "mae_pct": row_mae["value"],
+                    "status": "ok"
+                    if all(
+                        metric["status"] == "ok"
+                        for metric in (row_forecast, row_realized, row_coverage, row_hit_rate, row_mae)
+                    )
+                    else "attention",
+                }
+            )
+
     return {
         "last_run_status": str(view.get("last_run_status", "no-data")),
         "last_run_time": str(view.get("last_run_time", "")),
         **{k: v["value"] for k, v in metrics.items()},
         "metric_status": {k: {"status": v["status"], "reason": v["reason"]} for k, v in metrics.items()},
         "has_critical_metric_alert": critical_unknown_or_error,
+        "learning_metrics_panel": horizon_rows,
     }
 
 
@@ -193,6 +223,11 @@ def run_streamlit_app(dsn: str) -> None:
     )
     c15.metric("SOFT Evd", cards["soft_evidence_pct"], _metric_delta(cards, "soft_evidence_pct"))
     c16.metric("No-Evd Attr", cards["evidence_gap_count"], cards["evidence_gap_pct"])
+
+    learning_panel = cards.get("learning_metrics_panel", [])
+    if isinstance(learning_panel, list) and learning_panel:
+        st.subheader("Multi-horizon Learning Metrics")
+        st.dataframe(learning_panel, use_container_width=True)
 
     recent_runs = view.get("recent_runs", [])
     if isinstance(recent_runs, list) and recent_runs:

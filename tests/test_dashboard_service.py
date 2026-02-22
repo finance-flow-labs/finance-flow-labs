@@ -58,6 +58,9 @@ def test_dashboard_service_builds_operator_view_model():
     assert view["counters"]["raw_events"] == 100
     assert view["learning_metrics"]["horizon"] == "1M"
     assert view["learning_metrics"]["hit_rate"] == 0.58
+    assert view["learning_metrics_by_horizon"]["1W"]["horizon"] == "1W"
+    assert view["learning_metrics_by_horizon"]["1M"]["horizon"] == "1M"
+    assert view["learning_metrics_by_horizon"]["3M"]["horizon"] == "3M"
     assert view["attribution_summary"]["total"] == 4
     assert view["attribution_summary"]["top_category"] == "macro_miss"
     assert view["attribution_summary"]["top_count"] == 2
@@ -90,6 +93,8 @@ def test_dashboard_service_falls_back_when_learning_tables_missing():
     assert view["learning_metrics"]["forecast_count"] == 0
     assert view["learning_metrics"]["realized_count"] == 0
     assert view["learning_metrics"]["hit_rate"] is None
+    assert view["learning_metrics_by_horizon"]["1W"]["forecast_count"] == 0
+    assert view["learning_metrics_by_horizon"]["3M"]["forecast_count"] == 0
     assert view["attribution_summary"]["total"] == 0
     assert view["attribution_summary"]["top_category"] == "n/a"
 
@@ -116,6 +121,7 @@ def test_dashboard_service_falls_back_when_core_dashboard_queries_fail():
     }
     assert view["learning_metrics"]["forecast_count"] == 0
     assert view["learning_metrics"]["realized_count"] == 0
+    assert view["learning_metrics_by_horizon"]["1M"]["forecast_count"] == 0
 
 
 class StringEvidenceRepo(FakeDashboardRepo):
