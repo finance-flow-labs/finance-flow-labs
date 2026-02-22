@@ -80,6 +80,29 @@ def test_check_streamlit_access_accepts_streamlit_shell_response():
     assert result.reason == "ok"
 
 
+def test_check_streamlit_access_detects_auth_wall_from_redirect_history_even_if_final_url_recovers():
+    def fake_fetch(url: str, timeout_seconds: float):
+        return (
+            200,
+            "https://finance-flow-labs.streamlit.app/",
+            {},
+            "<!doctype html><title>Streamlit</title>",
+            [
+                "https://share.streamlit.io/-/auth/app?redirect_uri=https%3A%2F%2Ffinance-flow-labs.streamlit.app%2F",
+                "https://finance-flow-labs.streamlit.app/-/login?payload=abc123",
+            ],
+        )
+
+    result = streamlit_access.check_streamlit_access(
+        "https://finance-flow-labs.streamlit.app/",
+        fetch=fake_fetch,
+    )
+
+    assert result.ok is False
+    assert result.auth_wall_redirect is True
+    assert result.reason == "auth_wall_redirect_detected"
+
+
 def test_check_streamlit_access_flags_non_shell_payload_as_unexpected():
     def fake_fetch(url: str, timeout_seconds: float):
         return (200, "https://finance-flow-labs.streamlit.app/", {}, "plain text")
