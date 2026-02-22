@@ -92,3 +92,18 @@ def test_check_streamlit_access_flags_non_shell_payload_as_unexpected():
     assert result.ok is False
     assert result.auth_wall_redirect is False
     assert result.reason == "unexpected_response"
+
+
+def test_access_check_result_serializes_alert_fields():
+    result = streamlit_access.AccessCheckResult(
+        ok=False,
+        status_code=303,
+        final_url="https://finance-flow-labs.streamlit.app/",
+        auth_wall_redirect=True,
+        reason="auth_wall_redirect_detected",
+    )
+
+    payload = result.to_dict()
+
+    assert payload["alert"] is True
+    assert payload["alert_severity"] == "critical"
