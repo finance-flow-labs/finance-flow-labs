@@ -376,6 +376,26 @@ def test_dashboard_service_surfaces_deployed_access_from_env(monkeypatch: pytest
     assert view["deployed_access"]["checked_at"] == "2026-02-22T15:00:00Z"
 
 
+def test_dashboard_service_marks_ok_access_as_stale_when_check_too_old(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv(
+        "STREAMLIT_ACCESS_CHECK_JSON",
+        '{"ok": true, "checked_at": "2026-02-20T10:00:00Z"}',
+    )
+
+    view = build_dashboard_view(FakeDashboardRepo())
+    assert view["deployed_access"]["status"] == "degraded"
+    assert str(view["deployed_access"]["reason"]).startswith("access_check_stale:")
+    assert view["deployed_access"]["is_stale"] is True
+
+
+def test_dashboard_service_requires_checked_at_for_ok_access_payload(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("STREAMLIT_ACCESS_CHECK_JSON", '{"ok": true}')
+
+    view = build_dashboard_view(FakeDashboardRepo())
+    assert view["deployed_access"]["status"] == "unknown"
+    assert view["deployed_access"]["reason"] == "access_check_missing_checked_at"
+
+
 def test_dashboard_service_sets_unknown_when_access_json_invalid(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("STREAMLIT_ACCESS_CHECK_JSON", "{not-json")
 
