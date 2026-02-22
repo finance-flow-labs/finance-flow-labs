@@ -20,6 +20,18 @@ class AccessCheckResult:
     auth_wall_redirect: bool
     reason: str
 
+    @property
+    def alert(self) -> bool:
+        return not self.ok
+
+    @property
+    def alert_severity(self) -> str:
+        if self.ok:
+            return "none"
+        if self.auth_wall_redirect:
+            return "critical"
+        return "warning"
+
     def to_dict(self) -> dict[str, object]:
         return {
             "ok": self.ok,
@@ -27,6 +39,8 @@ class AccessCheckResult:
             "final_url": self.final_url,
             "auth_wall_redirect": self.auth_wall_redirect,
             "reason": self.reason,
+            "alert": self.alert,
+            "alert_severity": self.alert_severity,
         }
 
 
