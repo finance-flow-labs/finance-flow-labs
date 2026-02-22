@@ -17,7 +17,7 @@ SESSION_KEY = "ffl_view"
 
 
 def _query_param_to_text(raw_value: object) -> str:
-    if isinstance(raw_value, list):
+    if isinstance(raw_value, (list, tuple)):
         raw_value = raw_value[0] if raw_value else None
     return str(raw_value or "").strip().lower()
 

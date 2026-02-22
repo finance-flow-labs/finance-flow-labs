@@ -20,6 +20,13 @@ def test_resolve_view_uses_query_param_when_valid():
     assert warning is None
 
 
+def test_resolve_view_accepts_tuple_query_param_shape():
+    view, warning = router.resolve_view({"view": ("operator",)}, {})
+
+    assert view == "operator"
+    assert warning is None
+
+
 def test_resolve_view_falls_back_and_warns_when_invalid_query_param():
     view, warning = router.resolve_view({"view": "admin"}, {})
 
