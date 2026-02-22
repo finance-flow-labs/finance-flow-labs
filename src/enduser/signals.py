@@ -67,8 +67,9 @@ def render_macro_regime_card(regime_signal: dict[str, Any] | None) -> None:
     if regime_signal.get("source_tags"):
         tags = ", ".join(str(tag) for tag in regime_signal.get("source_tags", []) if str(tag).strip())
         st.caption(f"source_tags: {tags}")
-    if regime_signal.get("freshness_days"):
-        st.caption(f"freshness_policy: stale after {regime_signal.get('freshness_days')}d")
+    freshness_days = regime_signal.get("freshness_days")
+    if freshness_days is not None:
+        st.caption(f"freshness_policy: stale after {freshness_days}d")
 
     st.write(f"신뢰도: {confidence * 100:.0f}%")
     st.progress(confidence)

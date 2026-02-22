@@ -82,6 +82,35 @@ def test_render_macro_regime_card_placeholder_when_data_missing(monkeypatch):
     assert calls["caption"] == ["next_action: run macro-analysis ingestion and refresh Signals tab"]
 
 
+def test_render_macro_regime_card_shows_freshness_policy_when_zero_days(monkeypatch):
+    calls: dict[str, list] = {"caption": []}
+
+    fake_streamlit = types.SimpleNamespace(
+        subheader=lambda *_: None,
+        markdown=lambda *_: None,
+        caption=lambda text: calls["caption"].append(text),
+        write=lambda *_: None,
+        progress=lambda *_: None,
+        info=lambda *_: None,
+        warning=lambda *_: None,
+    )
+
+    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+    sys.modules.pop("src.enduser.signals", None)
+    signals = importlib.import_module("src.enduser.signals")
+
+    signals.render_macro_regime_card(
+        {
+            "regime": "neutral",
+            "confidence": 0.5,
+            "as_of": "2026-02-22T00:00:00Z",
+            "freshness_days": 0,
+        }
+    )
+
+    assert "freshness_policy: stale after 0d" in calls["caption"]
+
+
 def test_render_macro_regime_card_shows_stale_state(monkeypatch):
     calls: dict[str, list] = {"subheader": [], "warning": [], "caption": []}
 
