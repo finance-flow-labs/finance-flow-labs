@@ -22,6 +22,7 @@ def test_render_macro_regime_card_with_signal(monkeypatch):
         write=lambda text: calls["write"].append(text),
         progress=lambda value: calls["progress"].append(value),
         info=lambda text: calls["info"].append(text),
+        warning=lambda text: calls.setdefault("warning", []).append(text),
     )
 
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
@@ -48,11 +49,12 @@ def test_render_macro_regime_card_with_signal(monkeypatch):
 
 
 def test_render_macro_regime_card_placeholder_when_data_missing(monkeypatch):
-    calls: dict[str, list] = {"subheader": [], "info": []}
+    calls: dict[str, list] = {"subheader": [], "info": [], "warning": []}
 
     fake_streamlit = types.SimpleNamespace(
         subheader=lambda text: calls["subheader"].append(text),
         info=lambda text: calls["info"].append(text),
+        warning=lambda text: calls["warning"].append(text),
     )
 
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
@@ -63,3 +65,28 @@ def test_render_macro_regime_card_placeholder_when_data_missing(monkeypatch):
 
     assert calls["subheader"] == ["Macro regime signal"]
     assert calls["info"] == ["No macro regime signal yet. Analysis pipeline data is pending."]
+    assert calls["warning"] == []
+
+
+def test_render_macro_regime_card_shows_stale_state(monkeypatch):
+    calls: dict[str, list] = {"subheader": [], "warning": []}
+
+    fake_streamlit = types.SimpleNamespace(
+        subheader=lambda text: calls["subheader"].append(text),
+        warning=lambda text: calls["warning"].append(text),
+        markdown=lambda *_: None,
+        caption=lambda *_: None,
+        write=lambda *_: None,
+        progress=lambda *_: None,
+    )
+
+    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+    sys.modules.pop("src.enduser.signals", None)
+    signals = importlib.import_module("src.enduser.signals")
+
+    signals.render_macro_regime_card(
+        {"status": "stale", "message": "Latest macro regime signal is stale (> 7 days).", "regime": "neutral", "confidence": 0.4, "as_of": "2026-02-01T00:00:00Z"}
+    )
+
+    assert calls["subheader"] == ["Macro regime signal"]
+    assert calls["warning"] == ["[stale] Latest macro regime signal is stale (> 7 days)."]

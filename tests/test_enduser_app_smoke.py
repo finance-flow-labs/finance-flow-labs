@@ -55,20 +55,29 @@ def test_run_enduser_app_renders_portfolio_and_signals_tabs(monkeypatch):
         markdown=markdown,
         write=write,
         progress=progress,
+        warning=lambda text: calls.setdefault("warning", []).append(text),
     )
 
     monkeypatch.setitem(__import__("sys").modules, "streamlit", fake_streamlit)
     app = importlib.import_module("src.enduser.app")
+    monkeypatch.setattr(
+        app,
+        "read_latest_macro_regime_signal",
+        lambda _dsn: {
+            "status": "ok",
+            "regime": "risk_on",
+            "confidence": 0.7,
+            "drivers": ["cpi_cooling"],
+            "as_of": "2026-02-22T19:00:00Z",
+            "lineage_id": "run-1",
+        },
+    )
 
     app.run_enduser_app("postgres://example")
 
     assert calls["tabs"] == ["Portfolio", "Signals"]
     assert calls["subheader"] == ["Macro regime signal"]
-    assert calls["info"] == [
-        "Coming soon",
-        "No macro regime signal yet. Analysis pipeline data is pending.",
-        "More signal cards coming soon",
-    ]
+    assert calls["info"] == ["Coming soon", "More signal cards coming soon"]
 
 
 def test_enduser_entrypoint_requires_database_url(monkeypatch):
