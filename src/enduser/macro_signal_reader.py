@@ -61,6 +61,10 @@ def read_latest_macro_regime_signal(
     as_of_dt = _parse_as_of(as_of)
     stale = as_of_dt is None or as_of_dt < datetime.now(timezone.utc) - timedelta(days=freshness_days)
 
+    source_tags = row.get("source_tags") or []
+    if not source_tags:
+        source_tags = ["macro_analysis_results"]
+
     payload: dict[str, Any] = {
         "status": "stale" if stale else "ok",
         "reason": "stale" if stale else "ok",
@@ -69,6 +73,8 @@ def read_latest_macro_regime_signal(
         "drivers": row.get("reason_codes") or [],
         "as_of": as_of,
         "lineage_id": row.get("run_id"),
+        "source_tags": source_tags,
+        "freshness_days": freshness_days,
         "evidence_hard": row.get("evidence_hard") or [],
         "evidence_soft": row.get("evidence_soft") or [],
     }

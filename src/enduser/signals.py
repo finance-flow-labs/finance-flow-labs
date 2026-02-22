@@ -28,12 +28,17 @@ def render_macro_regime_card(regime_signal: dict[str, Any] | None) -> None:
 
     if not regime_signal:
         st.info("No macro regime signal yet. Analysis pipeline data is pending.")
+        st.caption("next_action: run macro-analysis ingestion and refresh Signals tab")
         return
 
     status = str(regime_signal.get("status", "ok")).strip().lower()
     if status in {"missing", "error"}:
         message = str(regime_signal.get("message") or "Macro regime signal unavailable.")
         st.warning(f"[{status}] {message}")
+        if status == "missing":
+            st.caption("next_action: seed at least one macro regime row, then reload")
+        else:
+            st.caption("next_action: inspect malformed row/DB connectivity and rerun")
         return
 
     if status == "stale":
@@ -42,6 +47,7 @@ def render_macro_regime_card(regime_signal: dict[str, Any] | None) -> None:
             or "Signal is stale. Review ingestion pipeline before using this for decisions."
         )
         st.warning(f"[stale] {message}")
+        st.caption("next_action: rerun macro-analysis pipeline to refresh as_of")
 
     regime_key = str(regime_signal.get("regime", "neutral")).strip().lower().replace("-", "_")
     emoji, regime_label = _REGIME_META.get(regime_key, _REGIME_META["neutral"])
@@ -58,6 +64,11 @@ def render_macro_regime_card(regime_signal: dict[str, Any] | None) -> None:
     st.caption(f"as_of: {_normalize_as_of(regime_signal.get('as_of'))}")
     if regime_signal.get("lineage_id"):
         st.caption(f"lineage_id: {regime_signal.get('lineage_id')}")
+    if regime_signal.get("source_tags"):
+        tags = ", ".join(str(tag) for tag in regime_signal.get("source_tags", []) if str(tag).strip())
+        st.caption(f"source_tags: {tags}")
+    if regime_signal.get("freshness_days"):
+        st.caption(f"freshness_policy: stale after {regime_signal.get('freshness_days')}d")
 
     st.write(f"신뢰도: {confidence * 100:.0f}%")
     st.progress(confidence)

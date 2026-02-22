@@ -35,6 +35,8 @@ def test_read_latest_macro_regime_signal_happy_path():
     assert payload["status"] == "ok"
     assert payload["regime"] == "risk_on"
     assert payload["lineage_id"] == "run-1"
+    assert payload["source_tags"] == ["macro_analysis_results"]
+    assert payload["freshness_days"] == 7
 
 
 def test_read_latest_macro_regime_signal_missing_row():
