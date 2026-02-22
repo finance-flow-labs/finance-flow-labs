@@ -129,13 +129,25 @@ Run from CI or post-deploy:
 - Recommended gate command: `./scripts/post_deploy_verify.sh` (non-zero exit means deploy verification failed)
 
 ```bash
-python3 -m src.ingestion.cli streamlit-access-check --url https://finance-flow-labs.streamlit.app/
+python3 -m src.ingestion.cli deploy-access-gate \
+  --url https://finance-flow-labs.streamlit.app/ \
+  --mode public
 ```
 
+Access policy:
+- `DEPLOY_ACCESS_MODE=public` (default): Streamlit auth wall is a **hard release blocker**.
+- `DEPLOY_ACCESS_MODE=restricted`: auth wall is allowed **only** when `DEPLOY_RESTRICTED_LOGIN_PATH` (or `--restricted-login-path`) is provided.
+
 Expected behavior:
-- Exit code `0`: app shell reachable and no Streamlit auth-wall redirect detected.
-- Exit code `2`: access contract broken (e.g., redirected to `https://share.streamlit.io/-/auth/app`).
-- JSON output includes `remediation_hint` for non-OK results to guide immediate operator action.
+- Exit code `0`: deploy gate passed for the selected access mode.
+- Exit code `2`: deploy gate failed (release blocker).
+- JSON output includes structured payload:
+  - `access_check.reason`
+  - `access_check.alert_severity`
+  - `access_check.remediation_hint`
+  - `gate.reason`
+  - `gate.severity`
+  - `gate.operator_message`
 
 Operational response when check fails:
 1. Verify Streamlit app visibility/access policy in deployment settings.

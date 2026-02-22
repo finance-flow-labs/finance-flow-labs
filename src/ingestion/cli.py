@@ -57,6 +57,14 @@ def build_parser() -> argparse.ArgumentParser:
     _ = streamlit_access_check.add_argument("--attempts", type=int, default=3)
     _ = streamlit_access_check.add_argument("--backoff-seconds", type=float, default=0.5)
 
+    deploy_access_gate = subparsers.add_parser("deploy-access-gate")
+    _ = deploy_access_gate.add_argument("--url", required=True)
+    _ = deploy_access_gate.add_argument("--mode", choices=["public", "restricted"])
+    _ = deploy_access_gate.add_argument("--restricted-login-path")
+    _ = deploy_access_gate.add_argument("--timeout-seconds", type=float, default=15)
+    _ = deploy_access_gate.add_argument("--attempts", type=int, default=3)
+    _ = deploy_access_gate.add_argument("--backoff-seconds", type=float, default=0.5)
+
     return parser
 
 
@@ -206,6 +214,40 @@ def run_streamlit_access_check_command(
     return result.to_dict()
 
 
+def run_deploy_access_gate_command(
+    url: str,
+    mode: str | None = None,
+    restricted_login_path: str | None = None,
+    timeout_seconds: float = 15,
+    attempts: int = 3,
+    backoff_seconds: float = 0.5,
+) -> dict[str, object]:
+    deploy_policy = importlib.import_module("src.ingestion.deploy_access_policy")
+
+    effective_mode = mode or os.getenv("DEPLOY_ACCESS_MODE", "public")
+    effective_restricted_login_path = restricted_login_path or os.getenv("DEPLOY_RESTRICTED_LOGIN_PATH")
+
+    access_result = run_streamlit_access_check_command(
+        url=url,
+        timeout_seconds=timeout_seconds,
+        attempts=attempts,
+        backoff_seconds=backoff_seconds,
+    )
+    decision = deploy_policy.evaluate_deploy_access(
+        access_result,
+        mode=effective_mode,
+        restricted_login_path=effective_restricted_login_path,
+    )
+
+    return {
+        "url": url,
+        "deploy_access_mode": deploy_policy.normalize_access_mode(effective_mode),
+        "restricted_login_path": effective_restricted_login_path,
+        "access_check": access_result,
+        "gate": decision.to_dict(),
+    }
+
+
 def create_forecast_record_command(
     thesis_id: str,
     horizon: str,
@@ -309,6 +351,20 @@ def main(argv: Optional[list[str]] = None) -> int:
         )
         print(json.dumps(result, default=str))
         return 0 if bool(result.get("ok")) else 2
+
+    if args.command == "deploy-access-gate":
+        result = run_deploy_access_gate_command(
+            url=args.url,
+            mode=args.mode,
+            restricted_login_path=args.restricted_login_path,
+            timeout_seconds=args.timeout_seconds,
+            attempts=args.attempts,
+            backoff_seconds=args.backoff_seconds,
+        )
+        print(json.dumps(result, default=str))
+        gate = result.get("gate") if isinstance(result, dict) else None
+        gate_ok = bool(gate.get("ok")) if isinstance(gate, dict) else False
+        return 0 if gate_ok else 2
 
     parser.print_help()
     return 1

@@ -133,6 +133,53 @@ def test_run_streamlit_access_check_command_returns_serializable_dict(monkeypatc
     assert result["reason"] == "auth_wall_redirect_detected"
 
 
+def test_cli_exposes_deploy_access_gate_command_with_defaults():
+    parser = cli.build_parser()
+    args = parser.parse_args(["deploy-access-gate", "--url", "https://finance-flow-labs.streamlit.app/"])
+
+    assert args.command == "deploy-access-gate"
+    assert args.mode is None
+    assert args.restricted_login_path is None
+
+
+def test_run_deploy_access_gate_command_combines_access_and_policy(monkeypatch):
+    monkeypatch.setenv("DEPLOY_ACCESS_MODE", "public")
+
+    def fake_access_check(**kwargs):
+        assert kwargs["url"] == "https://finance-flow-labs.streamlit.app/"
+        return {
+            "ok": False,
+            "auth_wall_redirect": True,
+            "reason": "auth_wall_redirect_detected",
+            "alert_severity": "critical",
+            "remediation_hint": "hint",
+        }
+
+    class FakeDecision:
+        def to_dict(self):
+            return {"ok": False, "release_blocker": True, "reason": "auth_wall_redirect_detected"}
+
+    class FakePolicyModule:
+        @staticmethod
+        def normalize_access_mode(mode: str):
+            return mode
+
+        @staticmethod
+        def evaluate_deploy_access(access_result, *, mode: str, restricted_login_path: str | None):
+            assert access_result["reason"] == "auth_wall_redirect_detected"
+            assert mode == "public"
+            assert restricted_login_path is None
+            return FakeDecision()
+
+    monkeypatch.setattr(cli, "run_streamlit_access_check_command", fake_access_check)
+    monkeypatch.setattr(cli.importlib, "import_module", lambda _: FakePolicyModule())
+
+    result = cli.run_deploy_access_gate_command("https://finance-flow-labs.streamlit.app/")
+
+    assert result["deploy_access_mode"] == "public"
+    assert result["gate"]["release_blocker"] is True
+
+
 def test_cli_exposes_forecast_record_create_command():
     parser = cli.build_parser()
     args = parser.parse_args(
