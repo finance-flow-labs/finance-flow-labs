@@ -159,6 +159,54 @@ class PostgresRepository:
         conn.close()
         return [dict(zip(columns, row)) for row in rows]
 
+    def write_investment_thesis(self, thesis: Mapping[str, object]) -> str:
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO investment_theses(
+                thesis_id,
+                created_by,
+                scope_level,
+                target_id,
+                title,
+                summary,
+                evidence_hard,
+                evidence_soft,
+                as_of,
+                lineage_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)
+            ON CONFLICT (thesis_id) DO UPDATE SET
+                created_by = EXCLUDED.created_by,
+                scope_level = EXCLUDED.scope_level,
+                target_id = EXCLUDED.target_id,
+                title = EXCLUDED.title,
+                summary = EXCLUDED.summary,
+                evidence_hard = EXCLUDED.evidence_hard,
+                evidence_soft = EXCLUDED.evidence_soft,
+                as_of = EXCLUDED.as_of,
+                lineage_id = EXCLUDED.lineage_id
+            RETURNING thesis_id
+            """,
+            (
+                thesis["thesis_id"],
+                thesis.get("created_by", "system"),
+                thesis["scope_level"],
+                thesis["target_id"],
+                thesis["title"],
+                thesis["summary"],
+                json.dumps(thesis.get("evidence_hard", []), default=str),
+                json.dumps(thesis.get("evidence_soft", []), default=str),
+                thesis["as_of"],
+                thesis["lineage_id"],
+            ),
+        )
+        row = cursor.fetchone() or (thesis["thesis_id"],)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return str(row[0])
+
     def write_forecast_record(self, record: Mapping[str, object]) -> int:
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()
@@ -251,6 +299,36 @@ class PostgresRepository:
                 hit,
                 forecast_error,
                 evaluated_at,
+            ),
+        )
+        row = cursor.fetchone() or (0,)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return int(row[0])
+
+    def write_forecast_error_attribution(self, attribution: Mapping[str, object]) -> int:
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO forecast_error_attributions(
+                realization_id,
+                category,
+                contribution,
+                note,
+                evidence_hard,
+                evidence_soft
+            ) VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb)
+            RETURNING id
+            """,
+            (
+                attribution["realization_id"],
+                attribution["category"],
+                attribution.get("contribution"),
+                attribution.get("note"),
+                json.dumps(attribution.get("evidence_hard", []), default=str),
+                json.dumps(attribution.get("evidence_soft", []), default=str),
             ),
         )
         row = cursor.fetchone() or (0,)

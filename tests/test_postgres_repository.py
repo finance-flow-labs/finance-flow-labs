@@ -98,6 +98,32 @@ def test_postgres_repository_writes_pipeline_rows_and_reads_counters():
     assert counters == {"raw_events": 3, "canonical_events": 2, "quarantine_events": 1}
 
 
+def test_postgres_repository_writes_investment_thesis_and_returns_id():
+    cursor = FakeCursor(fetch_one_rows=[("thesis-1",)])
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    thesis_id = repo.write_investment_thesis(
+        {
+            "thesis_id": "thesis-1",
+            "created_by": "autopilot",
+            "scope_level": "stock",
+            "target_id": "AAPL",
+            "title": "AI capex cycle persists",
+            "summary": "Cloud demand and margins support overweight.",
+            "evidence_hard": [{"source": "sec", "metric": "revenue_growth"}],
+            "evidence_soft": [{"source": "news", "note": "management tone improved"}],
+            "as_of": "2026-02-22T00:00:00+00:00",
+            "lineage_id": "lineage-1",
+        }
+    )
+
+    assert thesis_id == "thesis-1"
+    assert "INSERT INTO investment_theses" in cursor.executed[0][0]
+    assert "ON CONFLICT (thesis_id) DO UPDATE" in cursor.executed[0][0]
+    assert conn.committed is True
+
+
 def test_postgres_repository_writes_forecast_record_and_returns_id():
     cursor = FakeCursor(fetch_one_rows=[(42,)])
     conn = FakeConnection(cursor)
@@ -144,6 +170,27 @@ def test_postgres_repository_computes_realization_hit_and_forecast_error_from_fo
     # midpoint(0.02, 0.08)=0.05, so forecast_error should be 0.0 and hit=True
     assert insert_params[4] is True
     assert insert_params[5] == 0.0
+
+
+def test_postgres_repository_writes_forecast_error_attribution_and_returns_id():
+    cursor = FakeCursor(fetch_one_rows=[(321,)])
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    attribution_id = repo.write_forecast_error_attribution(
+        {
+            "realization_id": 99,
+            "category": "macro_miss",
+            "contribution": -0.03,
+            "note": "inflation re-acceleration",
+            "evidence_hard": [{"source": "fred", "metric": "CPI"}],
+            "evidence_soft": [{"source": "analyst", "note": "policy surprise"}],
+        }
+    )
+
+    assert attribution_id == 321
+    assert "INSERT INTO forecast_error_attributions" in cursor.executed[0][0]
+    assert conn.committed is True
 
 
 def test_postgres_repository_raises_when_forecast_missing_for_realization_write():
