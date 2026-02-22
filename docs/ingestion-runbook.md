@@ -1,5 +1,7 @@
 # Ingestion Runbook
 
+> Streamlit routing note: see `docs/STREAMLIT_VIEW_ROUTING.md` for end-user/operator view semantics and query-param deep links.
+
 ## Core Flow
 
 1. Evaluate source with legal/reliability hard gates.

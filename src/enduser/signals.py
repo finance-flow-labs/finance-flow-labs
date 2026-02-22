@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Any
-
-import streamlit as st
+import importlib
 
 _REGIME_META: dict[str, tuple[str, str]] = {
     "risk_on": ("🟢", "Risk-On"),
@@ -23,6 +22,8 @@ def _normalize_as_of(value: object) -> str:
 
 
 def render_macro_regime_card(regime_signal: dict[str, Any] | None) -> None:
+    st = importlib.import_module("streamlit")
+
     st.subheader("Macro regime signal")
 
     if not regime_signal:

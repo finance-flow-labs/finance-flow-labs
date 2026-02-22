@@ -406,13 +406,14 @@ def load_dashboard_view(dsn: str) -> dict[str, object]:
     return build_dashboard_view(repository)
 
 
-def run_streamlit_app(dsn: str) -> None:
+def run_streamlit_app(dsn: str, *, configure_page: bool = True) -> None:
     st = importlib.import_module("streamlit")
 
     view = load_dashboard_view(dsn)
     cards = build_operator_cards(view)
 
-    st.set_page_config(page_title="Ingestion Operator Dashboard", layout="wide")
+    if configure_page:
+        st.set_page_config(page_title="Ingestion Operator Dashboard", layout="wide")
     st.title("Ingestion Operator Dashboard")
     st.caption("Manual update monitoring (cron separated)")
 
