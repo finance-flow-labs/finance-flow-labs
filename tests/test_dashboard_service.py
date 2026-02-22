@@ -64,7 +64,7 @@ def test_dashboard_service_builds_operator_view_model():
     assert len(view["attribution_summary"]["top_categories"]) == 2
     assert view["attribution_summary"]["top_categories"][0]["mean_abs_contribution"] == 0.021
     assert view["attribution_summary"]["hard_evidence_coverage"] == 0.5
-    assert view["attribution_summary"]["hard_evidence_traceability_coverage"] == 0.25
+    assert view["attribution_summary"]["hard_evidence_traceability_coverage"] == 0.0
     assert view["attribution_summary"]["soft_evidence_coverage"] == 0.5
     assert view["attribution_summary"]["evidence_gap_count"] == 1
     assert view["attribution_summary"]["evidence_gap_coverage"] == 0.25

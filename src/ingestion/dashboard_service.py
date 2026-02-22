@@ -43,8 +43,16 @@ def _has_traceable_hard_evidence(value: object) -> bool:
     for item in _parse_evidence_items(value):
         if not isinstance(item, dict):
             continue
+
         source = str(item.get("source", "")).strip()
-        if source:
+        metric = str(item.get("metric", "") or item.get("metric_key", "")).strip()
+        entity_id = str(item.get("entity_id", "")).strip()
+        as_of = str(item.get("as_of", "")).strip()
+        available_at = str(item.get("available_at", "")).strip()
+        lineage_id = str(item.get("lineage_id", "")).strip()
+
+        has_reference = bool(metric or entity_id or as_of or available_at or lineage_id)
+        if source and has_reference:
             return True
     return False
 
