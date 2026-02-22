@@ -91,6 +91,8 @@ def test_cli_exposes_streamlit_access_check_command_with_defaults():
     assert args.command == "streamlit-access-check"
     assert args.url == "https://finance-flow-labs.streamlit.app/"
     assert args.timeout_seconds == 15
+    assert args.attempts == 3
+    assert args.backoff_seconds == 0.5
 
 
 def test_run_streamlit_access_check_command_returns_serializable_dict(monkeypatch):
@@ -106,15 +108,25 @@ def test_run_streamlit_access_check_command_returns_serializable_dict(monkeypatc
 
     class FakeModule:
         @staticmethod
-        def check_streamlit_access(url: str, timeout_seconds: float):
+        def check_streamlit_access(
+            url: str,
+            timeout_seconds: float,
+            attempts: int,
+            backoff_seconds: float,
+        ):
             assert url == "https://finance-flow-labs.streamlit.app/"
             assert timeout_seconds == 9
+            assert attempts == 4
+            assert backoff_seconds == 0.2
             return FakeResult()
 
     monkeypatch.setattr(cli.importlib, "import_module", lambda _: FakeModule())
 
     result = cli.run_streamlit_access_check_command(
-        "https://finance-flow-labs.streamlit.app/", timeout_seconds=9
+        "https://finance-flow-labs.streamlit.app/",
+        timeout_seconds=9,
+        attempts=4,
+        backoff_seconds=0.2,
     )
 
     assert result["auth_wall_redirect"] is True

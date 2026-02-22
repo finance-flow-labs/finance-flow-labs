@@ -139,3 +139,18 @@ Operational response when check fails:
 1. Verify Streamlit app visibility/access policy in deployment settings.
 2. Re-run check from a clean network session.
 3. If intentionally restricted, update this runbook + monitoring expectation and provide operator login instructions.
+
+### Reliability hardening for smoke checks
+
+- `streamlit-access-check` supports bounded retries to reduce transient-network false positives:
+  - `--attempts` (default: `3`)
+  - `--backoff-seconds` (default: `0.5`, linear backoff)
+- Retries apply only to `network_error:*` cases; auth-wall redirects fail immediately as critical.
+- Recommended CI/deploy invocation:
+
+```bash
+python3 -m src.ingestion.cli streamlit-access-check \
+  --url https://finance-flow-labs.streamlit.app/ \
+  --attempts 3 \
+  --backoff-seconds 0.5
+```

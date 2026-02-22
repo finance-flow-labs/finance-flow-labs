@@ -94,6 +94,51 @@ def test_check_streamlit_access_flags_non_shell_payload_as_unexpected():
     assert result.reason == "unexpected_response"
 
 
+def test_check_streamlit_access_retries_transient_network_error_then_succeeds():
+    calls: list[int] = []
+
+    def fake_fetch(url: str, timeout_seconds: float):
+        calls.append(1)
+        if len(calls) == 1:
+            raise streamlit_access.URLError("temporary_dns_failure")
+        return (200, url, {}, "<html>streamlit</html>")
+
+    result = streamlit_access.check_streamlit_access(
+        "https://finance-flow-labs.streamlit.app/",
+        fetch=fake_fetch,
+        attempts=2,
+        backoff_seconds=0,
+    )
+
+    assert len(calls) == 2
+    assert result.ok is True
+    assert result.reason == "ok"
+
+
+def test_check_streamlit_access_does_not_retry_auth_wall_failures():
+    calls: list[int] = []
+
+    def fake_fetch(url: str, timeout_seconds: float):
+        calls.append(1)
+        return (
+            303,
+            "https://share.streamlit.io/-/auth/app?redirect_uri=https%3A%2F%2Ffinance-flow-labs.streamlit.app%2F",
+            {},
+            "",
+        )
+
+    result = streamlit_access.check_streamlit_access(
+        "https://finance-flow-labs.streamlit.app/",
+        fetch=fake_fetch,
+        attempts=5,
+        backoff_seconds=0,
+    )
+
+    assert len(calls) == 1
+    assert result.ok is False
+    assert result.reason == "auth_wall_redirect_detected"
+
+
 def test_access_check_result_serializes_alert_fields():
     result = streamlit_access.AccessCheckResult(
         ok=False,
