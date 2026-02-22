@@ -138,6 +138,26 @@ def test_check_streamlit_access_retries_transient_network_error_then_succeeds():
     assert result.reason == "ok"
 
 
+def test_check_streamlit_access_treats_too_many_redirects_as_auth_wall():
+    calls: list[int] = []
+
+    def fake_fetch(url: str, timeout_seconds: float):
+        calls.append(1)
+        raise streamlit_access.URLError("Too many redirects")
+
+    result = streamlit_access.check_streamlit_access(
+        "https://finance-flow-labs.streamlit.app/",
+        fetch=fake_fetch,
+        attempts=3,
+        backoff_seconds=0,
+    )
+
+    assert len(calls) == 1
+    assert result.ok is False
+    assert result.auth_wall_redirect is True
+    assert result.reason == "auth_wall_redirect_detected"
+
+
 def test_check_streamlit_access_does_not_retry_auth_wall_failures():
     calls: list[int] = []
 

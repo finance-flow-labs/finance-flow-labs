@@ -116,6 +116,17 @@ def _check_streamlit_access_once(
     try:
         status_code, final_url, headers, body, redirect_chain = _normalize_fetch_result(fetch_fn(url, timeout_seconds))
     except URLError as exc:
+        reason_text = str(exc.reason)
+        lowered_reason = reason_text.lower()
+        if "too many redirects" in lowered_reason:
+            return AccessCheckResult(
+                ok=False,
+                status_code=None,
+                final_url=url,
+                auth_wall_redirect=True,
+                reason="auth_wall_redirect_detected",
+            )
+
         return AccessCheckResult(
             ok=False,
             status_code=None,
@@ -125,10 +136,17 @@ def _check_streamlit_access_once(
         )
 
     location = headers.get("Location") or headers.get("location")
-    auth_wall_redirect = _is_auth_wall_url(final_url) or any(_is_auth_wall_url(hop_url) for hop_url in redirect_chain)
-    if not auth_wall_redirect and isinstance(location, str):
+    auth_wall_final_url = _is_auth_wall_url(final_url)
+    auth_wall_seen_in_history = any(_is_auth_wall_url(hop_url) for hop_url in redirect_chain)
+    auth_wall_from_location = False
+    if isinstance(location, str):
         next_url = urljoin(url, location)
-        auth_wall_redirect = _is_auth_wall_url(next_url)
+        auth_wall_from_location = _is_auth_wall_url(next_url)
+
+    # Streamlit Community Cloud may transiently bounce through auth endpoints even for public apps.
+    # Treat auth wall as fatal only when the final response is still an auth/login endpoint or when
+    # the current response explicitly points to auth wall via Location header.
+    auth_wall_redirect = auth_wall_final_url or auth_wall_from_location
 
     if auth_wall_redirect:
         return AccessCheckResult(
