@@ -159,6 +159,106 @@ class PostgresRepository:
         conn.close()
         return [dict(zip(columns, row)) for row in rows]
 
+    def write_forecast_record(self, record: Mapping[str, object]) -> int:
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO forecast_records(
+                thesis_id,
+                horizon,
+                expected_return_low,
+                expected_return_high,
+                expected_volatility,
+                expected_drawdown,
+                confidence,
+                key_drivers,
+                evidence_hard,
+                evidence_soft,
+                as_of
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s)
+            RETURNING id
+            """,
+            (
+                record["thesis_id"],
+                record["horizon"],
+                record["expected_return_low"],
+                record["expected_return_high"],
+                record.get("expected_volatility"),
+                record.get("expected_drawdown"),
+                record["confidence"],
+                json.dumps(record.get("key_drivers", []), default=str),
+                json.dumps(record.get("evidence_hard", []), default=str),
+                json.dumps(record.get("evidence_soft", []), default=str),
+                record["as_of"],
+            ),
+        )
+        row = cursor.fetchone() or (0,)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return int(row[0])
+
+    def write_realization_from_outcome(
+        self,
+        forecast_id: int,
+        realized_return: float,
+        evaluated_at: object,
+        realized_volatility: Optional[float] = None,
+        max_drawdown: Optional[float] = None,
+    ) -> int:
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT expected_return_low, expected_return_high
+            FROM forecast_records
+            WHERE id = %s
+            """,
+            (forecast_id,),
+        )
+        forecast_row = cursor.fetchone()
+        if forecast_row is None:
+            cursor.close()
+            conn.close()
+            raise ValueError(f"forecast_id not found: {forecast_id}")
+
+        expected_low = float(forecast_row[0])
+        expected_high = float(forecast_row[1])
+        expected_mid = (expected_low + expected_high) / 2
+        forecast_error = expected_mid - realized_return
+        hit = expected_low <= realized_return <= expected_high
+
+        cursor.execute(
+            """
+            INSERT INTO realization_records(
+                forecast_id,
+                realized_return,
+                realized_volatility,
+                max_drawdown,
+                hit,
+                forecast_error,
+                evaluated_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                forecast_id,
+                realized_return,
+                realized_volatility,
+                max_drawdown,
+                hit,
+                forecast_error,
+                evaluated_at,
+            ),
+        )
+        row = cursor.fetchone() or (0,)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return int(row[0])
+
     def write_raw(self, row: Mapping[str, object]) -> None:
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()

@@ -96,3 +96,68 @@ def test_postgres_repository_writes_pipeline_rows_and_reads_counters():
     assert "INSERT INTO canonical_fact_store" in cursor.executed[1][0]
     assert "INSERT INTO quarantine_batches" in cursor.executed[2][0]
     assert counters == {"raw_events": 3, "canonical_events": 2, "quarantine_events": 1}
+
+
+def test_postgres_repository_writes_forecast_record_and_returns_id():
+    cursor = FakeCursor(fetch_one_rows=[(42,)])
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    forecast_id = repo.write_forecast_record(
+        {
+            "thesis_id": "thesis-1",
+            "horizon": "1M",
+            "expected_return_low": 0.04,
+            "expected_return_high": 0.10,
+            "expected_volatility": 0.2,
+            "expected_drawdown": 0.12,
+            "confidence": 0.7,
+            "key_drivers": ["macro:disinflation"],
+            "evidence_hard": [{"source": "fred", "metric": "CPI"}],
+            "evidence_soft": [{"source": "news", "note": "AI capex sentiment"}],
+            "as_of": "2026-02-22T00:00:00+00:00",
+        }
+    )
+
+    assert forecast_id == 42
+    assert "INSERT INTO forecast_records" in cursor.executed[0][0]
+    assert conn.committed is True
+
+
+def test_postgres_repository_computes_realization_hit_and_forecast_error_from_forecast_range():
+    cursor = FakeCursor(fetch_one_rows=[(0.02, 0.08), (99,)])
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    realization_id = repo.write_realization_from_outcome(
+        forecast_id=7,
+        realized_return=0.05,
+        evaluated_at="2026-03-22T00:00:00+00:00",
+        realized_volatility=0.18,
+        max_drawdown=0.09,
+    )
+
+    assert realization_id == 99
+    assert "SELECT expected_return_low, expected_return_high" in cursor.executed[0][0]
+    insert_sql, insert_params = cursor.executed[1]
+    assert "INSERT INTO realization_records" in insert_sql
+    # midpoint(0.02, 0.08)=0.05, so forecast_error should be 0.0 and hit=True
+    assert insert_params[4] is True
+    assert insert_params[5] == 0.0
+
+
+def test_postgres_repository_raises_when_forecast_missing_for_realization_write():
+    cursor = FakeCursor(fetch_one_rows=[None])
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    try:
+        repo.write_realization_from_outcome(
+            forecast_id=123,
+            realized_return=0.01,
+            evaluated_at="2026-03-22T00:00:00+00:00",
+        )
+    except ValueError as exc:
+        assert "forecast_id not found" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for missing forecast_id")
