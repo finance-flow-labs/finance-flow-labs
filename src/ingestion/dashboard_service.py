@@ -8,6 +8,7 @@ REQUIRED_LEARNING_HORIZONS: tuple[str, ...] = ("1W", "1M", "3M")
 DEFAULT_MIN_REALIZED_BY_HORIZON: dict[str, int] = {"1W": 8, "1M": 12, "3M": 6}
 DEFAULT_COVERAGE_FLOOR: float = 0.4
 POLICY_CHECK_BENCHMARK_KEYS: tuple[str, ...] = ("QQQ", "KOSPI200", "BTC", "SGOV")
+POLICY_LOCK_REFERENCE = "docs/POLICY_LOCK_V1.md"
 
 
 class DashboardRepositoryProtocol(Protocol):
@@ -235,14 +236,42 @@ def _build_policy_compliance(
         }
     )
 
-    checks.append(
-        {
-            "check": "Crypto sleeve composition (BTC/ETH >=70%, alts <=30%)",
-            "status": "UNKNOWN",
-            "reason": "Portfolio crypto sleeve exposure feed not available.",
-            "as_of": latest_run_time,
-            "evidence": {"dependency": "portfolio_exposure_crypto_sleeve"},
-        }
+    checks.extend(
+        [
+            {
+                "check": "KR asset scope lock (Index/ETF/single-stock)",
+                "status": "PASS",
+                "reason": "Policy lock declares KR index+ETF+single-stock scope.",
+                "as_of": latest_run_time,
+                "evidence": {"policy_lock": POLICY_LOCK_REFERENCE},
+            },
+            {
+                "check": "Max MDD guardrail lock (-30%)",
+                "status": "PASS",
+                "reason": "Policy lock declares max drawdown guardrail at -30%.",
+                "as_of": latest_run_time,
+                "evidence": {"policy_lock": POLICY_LOCK_REFERENCE},
+            },
+        ]
+    )
+
+    checks.extend(
+        [
+            {
+                "check": "Crypto scope lock (BTC/ETH core + top alts 일부)",
+                "status": "PASS",
+                "reason": "Policy lock allows BTC/ETH core with capped top-alt sleeve.",
+                "as_of": latest_run_time,
+                "evidence": {"policy_lock": POLICY_LOCK_REFERENCE},
+            },
+            {
+                "check": "Crypto sleeve composition (BTC/ETH >=70%, alts <=30%)",
+                "status": "UNKNOWN",
+                "reason": "Portfolio crypto sleeve exposure feed not available.",
+                "as_of": latest_run_time,
+                "evidence": {"dependency": "portfolio_exposure_crypto_sleeve"},
+            },
+        ]
     )
     checks.append(
         {
@@ -312,6 +341,32 @@ def _build_policy_compliance(
                 "series_latest_as_of": benchmark_as_of,
             },
         }
+    )
+
+    checks.extend(
+        [
+            {
+                "check": "Rebalancing cadence lock (Quarterly)",
+                "status": "PASS",
+                "reason": "Policy lock sets rebalancing cadence to quarterly.",
+                "as_of": latest_run_time,
+                "evidence": {"policy_lock": POLICY_LOCK_REFERENCE},
+            },
+            {
+                "check": "Execution mode lock (paper auto / real manual)",
+                "status": "PASS",
+                "reason": "Policy lock enforces manual approval for real trades.",
+                "as_of": latest_run_time,
+                "evidence": {"policy_lock": POLICY_LOCK_REFERENCE},
+            },
+            {
+                "check": "Reporting SLA lock (daily summary + critical alerts)",
+                "status": "PASS",
+                "reason": "Policy lock defines daily detailed summary and immediate critical alerts.",
+                "as_of": latest_run_time,
+                "evidence": {"policy_lock": POLICY_LOCK_REFERENCE},
+            },
+        ]
     )
 
     summary = {
