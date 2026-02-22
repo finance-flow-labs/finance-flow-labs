@@ -30,6 +30,7 @@ routes = [
 
 results: list[dict[str, object]] = []
 release_blocker = False
+first_blocker: dict[str, object] | None = None
 
 for label, route_url in routes:
     cmd = [
@@ -53,12 +54,23 @@ for label, route_url in routes:
     reason = str(gate.get("reason") or access.get("reason") or "unknown")
     severity = str(gate.get("severity") or access.get("alert_severity") or "unknown")
     hint = str(gate.get("remediation_hint") or access.get("remediation_hint") or "")
+    operator_message = str(gate.get("operator_message") or "")
     is_blocker = bool(gate.get("release_blocker"))
     release_blocker = release_blocker or is_blocker
+    if is_blocker and first_blocker is None:
+        first_blocker = {
+            "route": label,
+            "reason": reason,
+            "severity": severity,
+            "operator_message": operator_message,
+            "hint": hint,
+        }
 
     print(
         f"[deploy-access-gate:{label}] mode={mode} release_blocker={is_blocker} reason={reason} severity={severity}"
     )
+    if operator_message:
+        print(f"[deploy-access-gate:{label}] operator_message={operator_message}")
     if hint:
         print(f"[deploy-access-gate:{label}] hint={hint}")
 
@@ -69,6 +81,7 @@ for label, route_url in routes:
             "release_blocker": is_blocker,
             "reason": reason,
             "severity": severity,
+            "operator_message": operator_message,
             "hint": hint,
         }
     )
@@ -80,8 +93,22 @@ for item in results:
         + f"{item['route']}: blocker=`{str(item['release_blocker']).lower()}` "
         + f"reason=`{item['reason']}` severity=`{item['severity']}`"
     )
+    if item["operator_message"]:
+        summary_lines.append(f"    - operator_message: {item['operator_message']}")
     if item["hint"]:
         summary_lines.append(f"    - hint: {item['hint']}")
+
+if first_blocker:
+    summary_lines += [
+        "- first_blocker:",
+        f"  - route: `{first_blocker['route']}`",
+        f"  - reason: `{first_blocker['reason']}`",
+        f"  - severity: `{first_blocker['severity']}`",
+    ]
+    if first_blocker["operator_message"]:
+        summary_lines.append(f"  - operator_message: {first_blocker['operator_message']}")
+    if first_blocker["hint"]:
+        summary_lines.append(f"  - hint: {first_blocker['hint']}")
 
 Path("deploy_access_gate_summary.md").write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
 out_path.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
