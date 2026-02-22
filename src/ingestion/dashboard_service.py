@@ -63,9 +63,24 @@ def build_dashboard_view(
     repository: DashboardRepositoryProtocol,
     limit: int = 20,
 ) -> dict[str, object]:
-    recent_runs = repository.read_latest_runs(limit=limit)
-    counters = repository.read_status_counters()
-    learning_metrics = repository.read_learning_metrics(horizon="1M")
+    recent_runs = _safe_repo_call([], repository.read_latest_runs, limit=limit)
+    counters = _safe_repo_call(
+        {"raw_events": 0, "canonical_events": 0, "quarantine_events": 0},
+        repository.read_status_counters,
+    )
+    learning_metrics = _safe_repo_call(
+        {
+            "horizon": "1M",
+            "forecast_count": 0,
+            "realized_count": 0,
+            "realization_coverage": None,
+            "hit_rate": None,
+            "mean_abs_forecast_error": None,
+            "mean_signed_forecast_error": None,
+        },
+        repository.read_learning_metrics,
+        horizon="1M",
+    )
 
     attribution_summary = {
         "total": 0,
@@ -79,8 +94,13 @@ def build_dashboard_view(
         "evidence_gap_coverage": None,
     }
     if hasattr(repository, "read_forecast_error_category_stats"):
-        category_stats = repository.read_forecast_error_category_stats(horizon="1M", limit=5)
-        if category_stats:
+        category_stats = _safe_repo_call(
+            [],
+            repository.read_forecast_error_category_stats,
+            horizon="1M",
+            limit=5,
+        )
+        if isinstance(category_stats, list) and category_stats:
             top = category_stats[0]
             attribution_summary = {
                 "total": int(sum(int(row.get("attribution_count", 0)) for row in category_stats)),
@@ -95,8 +115,13 @@ def build_dashboard_view(
             }
 
     if hasattr(repository, "read_forecast_error_attributions"):
-        attribution_rows = repository.read_forecast_error_attributions(horizon="1M", limit=200)
-        if attribution_rows:
+        attribution_rows = _safe_repo_call(
+            [],
+            repository.read_forecast_error_attributions,
+            horizon="1M",
+            limit=200,
+        )
+        if isinstance(attribution_rows, list) and attribution_rows:
             categories = [
                 str(row.get("category", "unknown"))
                 for row in attribution_rows
@@ -148,10 +173,14 @@ def build_dashboard_view(
                 attribution_summary["evidence_gap_count"] = evidence_gap_count
                 attribution_summary["evidence_gap_coverage"] = evidence_gap_count / valid_rows
 
-    if recent_runs:
+    if isinstance(recent_runs, list) and recent_runs:
         latest = recent_runs[0]
-        last_run_status = str(latest.get("status", "unknown"))
-        last_run_time = str(latest.get("finished_at", ""))
+        if isinstance(latest, dict):
+            last_run_status = str(latest.get("status", "unknown"))
+            last_run_time = str(latest.get("finished_at", ""))
+        else:
+            last_run_status = "unknown"
+            last_run_time = ""
     else:
         last_run_status = "no-data"
         last_run_time = ""

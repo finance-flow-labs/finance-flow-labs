@@ -69,3 +69,50 @@ def test_dashboard_service_builds_operator_view_model():
     assert view["attribution_summary"]["evidence_gap_count"] == 1
     assert view["attribution_summary"]["evidence_gap_coverage"] == 0.25
     assert len(view["recent_runs"]) == 2
+
+
+class FailingLearningRepo(FakeDashboardRepo):
+    def read_learning_metrics(self, horizon="1M"):
+        raise RuntimeError("psycopg2.errors.UndefinedTable")
+
+    def read_forecast_error_category_stats(self, horizon="1M", limit=5):
+        raise RuntimeError("psycopg2.errors.UndefinedTable")
+
+    def read_forecast_error_attributions(self, horizon="1M", limit=200):
+        raise RuntimeError("psycopg2.errors.UndefinedTable")
+
+
+def test_dashboard_service_falls_back_when_learning_tables_missing():
+    view = build_dashboard_view(FailingLearningRepo())
+
+    assert view["last_run_status"] == "success"
+    assert view["learning_metrics"]["horizon"] == "1M"
+    assert view["learning_metrics"]["forecast_count"] == 0
+    assert view["learning_metrics"]["realized_count"] == 0
+    assert view["learning_metrics"]["hit_rate"] is None
+    assert view["attribution_summary"]["total"] == 0
+    assert view["attribution_summary"]["top_category"] == "n/a"
+
+
+class BrokenDashboardRepo:
+    def read_latest_runs(self, limit=20):
+        raise RuntimeError("db unavailable")
+
+    def read_status_counters(self):
+        raise RuntimeError("db unavailable")
+
+    def read_learning_metrics(self, horizon="1M"):
+        raise RuntimeError("db unavailable")
+
+
+def test_dashboard_service_falls_back_when_core_dashboard_queries_fail():
+    view = build_dashboard_view(BrokenDashboardRepo())
+
+    assert view["last_run_status"] == "no-data"
+    assert view["counters"] == {
+        "raw_events": 0,
+        "canonical_events": 0,
+        "quarantine_events": 0,
+    }
+    assert view["learning_metrics"]["forecast_count"] == 0
+    assert view["learning_metrics"]["realized_count"] == 0
