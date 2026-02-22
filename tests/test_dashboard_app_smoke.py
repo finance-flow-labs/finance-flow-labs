@@ -30,6 +30,8 @@ def test_dashboard_app_builds_cards_from_view_model():
                 "total": 7,
                 "top_category": "macro_miss",
                 "top_count": 3,
+                "hard_evidence_coverage": 0.86,
+                "soft_evidence_coverage": 0.57,
             },
             "recent_runs": [],
         }
@@ -46,3 +48,5 @@ def test_dashboard_app_builds_cards_from_view_model():
     assert cards["attribution_total"] == 7
     assert cards["attribution_top_category"] == "macro_miss"
     assert cards["attribution_top_count"] == 3
+    assert cards["hard_evidence_pct"] == "86.0%"
+    assert cards["soft_evidence_pct"] == "57.0%"
