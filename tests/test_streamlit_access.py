@@ -43,6 +43,25 @@ def test_check_streamlit_access_detects_auth_wall_from_location_header():
     assert result.auth_wall_redirect is True
 
 
+def test_check_streamlit_access_detects_streamlit_login_redirect_loop():
+    def fake_fetch(url: str, timeout_seconds: float):
+        return (
+            303,
+            "https://finance-flow-labs.streamlit.app/-/login?payload=abc123",
+            {},
+            "",
+        )
+
+    result = streamlit_access.check_streamlit_access(
+        "https://finance-flow-labs.streamlit.app/",
+        fetch=fake_fetch,
+    )
+
+    assert result.ok is False
+    assert result.auth_wall_redirect is True
+    assert result.reason == "auth_wall_redirect_detected"
+
+
 def test_check_streamlit_access_accepts_streamlit_shell_response():
     def fake_fetch(url: str, timeout_seconds: float):
         return (
