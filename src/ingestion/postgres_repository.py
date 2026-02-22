@@ -337,6 +337,60 @@ class PostgresRepository:
         conn.close()
         return int(row[0])
 
+    def read_expected_vs_realized(
+        self,
+        horizon: str = "1M",
+        limit: int = 100,
+    ) -> list[dict[str, object]]:
+        """Read forecast-vs-realization rows for learning loop evaluation.
+
+        Returns thesis metadata and HARD/SOFT evidence columns for traceability.
+        """
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                fr.id AS forecast_id,
+                fr.horizon,
+                fr.as_of,
+                fr.expected_return_low,
+                fr.expected_return_high,
+                fr.expected_volatility,
+                fr.expected_drawdown,
+                fr.confidence,
+                fr.key_drivers,
+                fr.evidence_hard AS forecast_evidence_hard,
+                fr.evidence_soft AS forecast_evidence_soft,
+                rr.id AS realization_id,
+                rr.realized_return,
+                rr.realized_volatility,
+                rr.max_drawdown,
+                rr.hit,
+                rr.forecast_error,
+                rr.evaluated_at,
+                it.thesis_id,
+                it.scope_level,
+                it.target_id,
+                it.title,
+                it.summary,
+                it.evidence_hard AS thesis_evidence_hard,
+                it.evidence_soft AS thesis_evidence_soft
+            FROM forecast_records fr
+            JOIN investment_theses it ON it.thesis_id = fr.thesis_id
+            LEFT JOIN realization_records rr ON rr.forecast_id = fr.id
+            WHERE fr.horizon = %s
+            ORDER BY fr.as_of DESC, fr.id DESC
+            LIMIT %s
+            """,
+            (horizon, limit),
+        )
+        rows = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        cursor.close()
+        conn.close()
+        return [dict(zip(columns, row)) for row in rows]
+
     def write_raw(self, row: Mapping[str, object]) -> None:
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()
