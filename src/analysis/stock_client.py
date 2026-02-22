@@ -1,15 +1,18 @@
-"""DART (Korea) and SEC EDGAR (US) stock data clients.
+"""DART (Korea), SEC EDGAR (US), and FMP stock data clients.
 
 Environment variables:
-    OPEN_DART_API_KEY   — OpenDART API key (https://opendart.fss.or.kr, free)
+    OPEN_DART_API_KEY    — OpenDART API key (https://opendart.fss.or.kr, free)
     SEC_EDGAR_USER_AGENT — SEC EDGAR user-agent string (required by SEC policy)
-                           e.g. "FinanceFlowLabs research@example.com"
+                            e.g. "FinanceFlowLabs research@example.com"
+    FMP_API_KEY          — Financial Modeling Prep API key
+                            (https://site.financialmodelingprep.com/developer/docs)
 """
 
 from __future__ import annotations
 
 import json
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
@@ -390,3 +393,166 @@ def _extract_edgar_metrics(us_gaap: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return result
+
+
+# ---------------------------------------------------------------------------
+# Financial Modeling Prep (FMP)
+# ---------------------------------------------------------------------------
+
+_FMP_BASE = "https://financialmodelingprep.com/api"
+
+
+class FmpStockClient:
+    """Financial Modeling Prep client focused on valuation/consensus signals.
+
+    Uses API v3/v4 endpoints and degrades gracefully when plan/key restrictions
+    return HTTP errors (e.g. 401/403).
+    """
+
+    def __init__(self, api_key: str = "") -> None:
+        self._api_key = api_key or os.getenv("FMP_API_KEY", "")
+
+    def _get(self, path: str, params: dict[str, str]) -> Any:
+        if not self._api_key:
+            raise ValueError(
+                "FMP_API_KEY is not set. "
+                "Register at https://site.financialmodelingprep.com/developer/docs "
+                "to get an API key."
+            )
+
+        query = dict(params)
+        query["apikey"] = self._api_key
+        qs = urllib.parse.urlencode(query)
+        url = f"{_FMP_BASE}{path}?{qs}"
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "FinanceFlowLabs/1.0 (stock-analysis research bot)"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            raise ValueError(f"FMP HTTP {exc.code} for {path}") from exc
+        except Exception as exc:
+            raise ValueError(f"FMP request failed for {path}: {exc}") from exc
+
+    def _safe_get(
+        self,
+        errors: list[str],
+        label: str,
+        path: str,
+        params: dict[str, str],
+        default: Any,
+    ) -> Any:
+        try:
+            return self._get(path, params)
+        except Exception as exc:
+            errors.append(f"{label}: {exc}")
+            return default
+
+    def fetch_snapshot(self, query: str, limit: int = 5) -> dict[str, Any]:
+        """Return valuation-oriented snapshot for a company/ticker.
+
+        Output fields:
+        - companies: search candidates from FMP
+        - symbol: resolved symbol used for downstream endpoints
+        - quote: latest quote row (price/market cap/ratios, etc.)
+        - key_metrics: valuation and profitability metric rows
+        - analyst_estimates: consensus estimate rows
+        - price_target_consensus: v4 consensus summary
+        - price_targets: recent price target entries
+        - errors: non-fatal endpoint errors (missing plan/forbidden/etc.)
+        """
+        query_clean = query.strip()
+        if not query_clean:
+            raise ValueError("query is required")
+
+        errors: list[str] = []
+
+        companies_raw = self._safe_get(
+            errors,
+            "search",
+            "/v3/search",
+            {"query": query_clean, "limit": "10"},
+            [],
+        )
+        companies: list[dict[str, Any]] = []
+        if isinstance(companies_raw, list):
+            for row in companies_raw:
+                if not isinstance(row, dict):
+                    continue
+                companies.append(
+                    {
+                        "symbol": row.get("symbol", ""),
+                        "name": row.get("name", ""),
+                        "exchange": row.get("exchangeShortName", row.get("exchange", "")),
+                        "type": row.get("type", ""),
+                    }
+                )
+
+        resolved_symbol = query_clean.upper()
+        if companies:
+            best = companies[0].get("symbol")
+            if isinstance(best, str) and best:
+                resolved_symbol = best.upper()
+
+        quote_rows = self._safe_get(
+            errors,
+            "quote",
+            f"/v3/quote/{urllib.parse.quote(resolved_symbol)}",
+            {},
+            [],
+        )
+        quote: dict[str, Any] = quote_rows[0] if isinstance(quote_rows, list) and quote_rows else {}
+
+        key_metrics_raw = self._safe_get(
+            errors,
+            "key_metrics",
+            f"/v3/key-metrics/{urllib.parse.quote(resolved_symbol)}",
+            {"limit": str(limit)},
+            [],
+        )
+        key_metrics = key_metrics_raw if isinstance(key_metrics_raw, list) else []
+
+        estimates_raw = self._safe_get(
+            errors,
+            "analyst_estimates",
+            f"/v3/analyst-estimates/{urllib.parse.quote(resolved_symbol)}",
+            {"limit": str(limit)},
+            [],
+        )
+        analyst_estimates = estimates_raw if isinstance(estimates_raw, list) else []
+
+        pt_consensus_raw = self._safe_get(
+            errors,
+            "price_target_consensus",
+            "/v4/price-target-consensus",
+            {"symbol": resolved_symbol},
+            [],
+        )
+        price_target_consensus: dict[str, Any] = {}
+        if isinstance(pt_consensus_raw, list) and pt_consensus_raw:
+            first = pt_consensus_raw[0]
+            if isinstance(first, dict):
+                price_target_consensus = first
+
+        price_targets_raw = self._safe_get(
+            errors,
+            "price_targets",
+            "/v4/price-target",
+            {"symbol": resolved_symbol, "limit": str(limit)},
+            [],
+        )
+        price_targets = price_targets_raw if isinstance(price_targets_raw, list) else []
+
+        return {
+            "query": query_clean,
+            "symbol": resolved_symbol,
+            "companies": companies,
+            "quote": quote,
+            "key_metrics": key_metrics,
+            "analyst_estimates": analyst_estimates,
+            "price_target_consensus": price_target_consensus,
+            "price_targets": price_targets,
+            "errors": errors,
+        }
