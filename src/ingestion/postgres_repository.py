@@ -101,9 +101,11 @@ class PostgresRepository:
                 reason_codes,
                 risk_flags,
                 triggers,
+                evidence_hard,
+                evidence_soft,
                 narrative,
                 model
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
             """,
             (
                 result["run_id"],
@@ -118,6 +120,8 @@ class PostgresRepository:
                 json.dumps(result["reason_codes"], default=str),
                 json.dumps(result["risk_flags"], default=str),
                 json.dumps(result["triggers"], default=str),
+                json.dumps(result.get("evidence_hard", []), default=str),
+                json.dumps(result.get("evidence_soft", []), default=str),
                 result["narrative"],
                 result.get("model"),
             ),
@@ -144,6 +148,8 @@ class PostgresRepository:
                 reason_codes,
                 risk_flags,
                 triggers,
+                evidence_hard,
+                evidence_soft,
                 narrative,
                 model,
                 created_at
