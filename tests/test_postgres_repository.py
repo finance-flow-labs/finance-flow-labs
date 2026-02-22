@@ -173,6 +173,61 @@ def test_postgres_repository_writes_forecast_record_and_returns_id():
     assert conn.committed is True
 
 
+def test_postgres_repository_rejects_investment_thesis_without_hard_evidence():
+    cursor = FakeCursor(fetch_one_rows=[("thesis-1",)])
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    try:
+        repo.write_investment_thesis(
+            {
+                "thesis_id": "thesis-1",
+                "created_by": "autopilot",
+                "scope_level": "stock",
+                "target_id": "AAPL",
+                "title": "AI capex cycle persists",
+                "summary": "Cloud demand and margins support overweight.",
+                "evidence_hard": [],
+                "evidence_soft": [{"source": "news", "note": "tone improved"}],
+                "as_of": "2026-02-22T00:00:00+00:00",
+                "lineage_id": "lineage-1",
+            }
+        )
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "investment thesis requires non-empty evidence_hard" in str(exc)
+
+    assert cursor.executed == []
+
+
+def test_postgres_repository_rejects_forecast_record_without_hard_evidence():
+    cursor = FakeCursor(fetch_one_rows=[(42,)])
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    try:
+        repo.write_forecast_record(
+            {
+                "thesis_id": "thesis-1",
+                "horizon": "1M",
+                "expected_return_low": 0.04,
+                "expected_return_high": 0.10,
+                "expected_volatility": 0.2,
+                "expected_drawdown": 0.12,
+                "confidence": 0.7,
+                "key_drivers": ["macro:disinflation"],
+                "evidence_hard": [],
+                "evidence_soft": [{"source": "news", "note": "AI capex sentiment"}],
+                "as_of": "2026-02-22T00:00:00+00:00",
+            }
+        )
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "forecast record requires non-empty evidence_hard" in str(exc)
+
+    assert cursor.executed == []
+
+
 def test_postgres_repository_computes_realization_hit_and_forecast_error_from_forecast_range():
     cursor = FakeCursor(fetch_one_rows=[(0.02, 0.08), (99,)])
     conn = FakeConnection(cursor)
