@@ -9,6 +9,7 @@ from urllib.request import Request, urlopen
 
 AUTH_WALL_HOST = "share.streamlit.io"
 AUTH_WALL_PATH_PREFIX = "/-/auth/app"
+STREAMLIT_LOGIN_PATH_PREFIX = "/-/login"
 
 
 @dataclass(frozen=True)
@@ -45,12 +46,24 @@ def _default_fetch(url: str, timeout_seconds: float) -> tuple[int | None, str, M
 
 def _is_auth_wall_url(url: str) -> bool:
     try:
-        from urllib.parse import urlparse
+        from urllib.parse import parse_qs, urlparse
 
         parsed = urlparse(url)
     except ValueError:
         return False
-    return parsed.netloc == AUTH_WALL_HOST and parsed.path.startswith(AUTH_WALL_PATH_PREFIX)
+
+    if parsed.netloc == AUTH_WALL_HOST and parsed.path.startswith(AUTH_WALL_PATH_PREFIX):
+        return True
+
+    # Streamlit can bounce through app-local /-/login before redirecting back to auth wall.
+    # Treat this as auth wall as well to avoid false "unexpected_response" on redirect loops.
+    if parsed.path.startswith(STREAMLIT_LOGIN_PATH_PREFIX):
+        query = parse_qs(parsed.query)
+        payload_values = query.get("payload")
+        if payload_values:
+            return True
+
+    return False
 
 
 def check_streamlit_access(
