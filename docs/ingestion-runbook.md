@@ -45,6 +45,9 @@ Environment variables:
 - Repository API:
   - `write_macro_series_points(points)`
   - `read_macro_series_points(metric_key, limit)`
+- 동작 규칙:
+  - `run_ingestion_job()`에서 FRED/ECOS 배치가 canonical로 승격되면 정규화 후 `macro_series_points`를 자동 적재
+  - 품질/소스 게이트 실패로 quarantine된 배치는 정규화 적재를 수행하지 않음
 
 ## Macro Analysis Persistence (v1)
 
