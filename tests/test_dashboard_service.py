@@ -9,6 +9,9 @@ REQUIRED_LEARNING_HORIZONS = dashboard_service.REQUIRED_LEARNING_HORIZONS
 
 
 class FakeDashboardRepo:
+    def read_macro_series_points(self, metric_key, limit=1):
+        return [{"metric_key": metric_key, "as_of": "2026-02-22T08:00:00Z", "value": 1.0}]
+
     def read_latest_runs(self, limit=20):
         return [
             {"run_id": "run-2", "status": "success", "finished_at": "2026-02-18T01:00:00Z"},
@@ -86,6 +89,10 @@ def test_dashboard_service_builds_operator_view_model():
     assert len(view["attribution_gap_rows"]) == 4
     assert view["attribution_gap_rows"][0]["evidence_gap_reason"] == "hard_untraceable"
     assert view["attribution_gap_rows"][-1]["evidence_gap_reason"] == "missing_hard_and_soft"
+    assert view["policy_compliance"]["summary"]["total"] == 5
+    assert view["policy_compliance"]["summary"]["unknown"] == 2
+    assert view["policy_compliance"]["checks"][3]["status"] == "WARN"
+    assert view["policy_compliance"]["checks"][4]["status"] == "PASS"
     assert len(view["recent_runs"]) == 2
 
 
@@ -199,6 +206,17 @@ def test_dashboard_service_parses_object_evidence_payloads():
     assert summary["soft_evidence_coverage"] == 0.5
     assert summary["evidence_gap_count"] == 0
     assert summary["evidence_gap_coverage"] == 0.0
+
+
+def test_dashboard_service_policy_compliance_marks_missing_benchmark_dependencies_unknown():
+    class MissingBenchmarkRepo(FakeDashboardRepo):
+        def read_macro_series_points(self, metric_key, limit=1):
+            return []
+
+    view = build_dashboard_view(MissingBenchmarkRepo())
+    benchmark_check = view["policy_compliance"]["checks"][4]
+    assert benchmark_check["status"] == "WARN"
+    assert "Missing benchmark series" in benchmark_check["reason"]
 
 
 def test_dashboard_service_learning_reliability_threshold_env_override(monkeypatch: pytest.MonkeyPatch):

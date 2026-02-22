@@ -98,7 +98,9 @@ def test_dashboard_app_builds_cards_from_view_model():
     assert len(cards["learning_metrics_panel"]) == 3
     assert cards["learning_metrics_panel"][0]["horizon"] == "1W"
     assert len(cards["policy_compliance_panel"]) >= 10
-    assert cards["policy_compliance_panel"][0]["policy_item"] == "Universe"
+    assert cards["policy_compliance_panel"][0]["check"] == "Universe"
+    assert cards["policy_compliance_panel"][0]["status"] == "UNKNOWN"
+    assert cards["policy_compliance_summary"]["unknown"] >= 10
     assert cards["learning_metrics_panel"][0]["reliability_badge"] == "🟢 reliable"
     assert (
         cards["learning_metrics_panel"][0]["reliability_reason_text"]
@@ -274,6 +276,28 @@ def test_dashboard_app_flags_primary_horizon_reliability_guardrail():
     assert cards["learning_metrics_panel"][1]["reliability_badge"] == "🔴 insufficient"
     assert "Realized sample below minimum" in cards["learning_metrics_panel"][1]["reliability_reason_text"]
     assert cards["learning_metrics_panel"][1]["status"] == "warn"
+
+
+def test_dashboard_app_uses_policy_compliance_payload_when_present():
+    cards = dashboard_app.build_operator_cards(
+        {
+            "policy_compliance": {
+                "checks": [
+                    {
+                        "check": "Primary horizon readiness (1M)",
+                        "status": "FAIL",
+                        "reason": "realized_count_below_min:4<12",
+                        "as_of": None,
+                        "evidence": {"realized_count": 4},
+                    }
+                ],
+                "summary": {"total": 1, "pass": 0, "warn": 0, "fail": 1, "unknown": 0},
+            }
+        }
+    )
+
+    assert cards["policy_compliance_panel"][0]["status"] == "FAIL"
+    assert cards["policy_compliance_summary"]["fail"] == 1
 
 
 def test_dashboard_app_marks_non_finite_numbers_as_error_not_crash():
