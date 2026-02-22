@@ -126,6 +126,7 @@ Validation guardrails:
 ### Dashboard access contract smoke check
 
 Run from CI or post-deploy:
+- Recommended gate command: `./scripts/post_deploy_verify.sh` (non-zero exit means deploy verification failed)
 
 ```bash
 python3 -m src.ingestion.cli streamlit-access-check --url https://finance-flow-labs.streamlit.app/
