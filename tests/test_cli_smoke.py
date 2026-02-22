@@ -47,3 +47,38 @@ def test_read_expected_vs_realized_command_uses_postgres_repository(monkeypatch)
     rows = cli.read_expected_vs_realized_command(horizon="3M", limit=10)
 
     assert rows == [{"horizon": "3M", "limit": 10, "dsn": "postgres://example"}]
+
+
+def test_cli_exposes_forecast_error_attributions_command_with_defaults():
+    parser = cli.build_parser()
+    args = parser.parse_args(["forecast-error-attributions"])
+
+    assert args.command == "forecast-error-attributions"
+    assert args.horizon == "1M"
+    assert args.limit == 50
+
+
+def test_read_forecast_error_attributions_command_requires_database_url(monkeypatch):
+    monkeypatch.delenv("SUPABASE_DB_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    with pytest.raises(ValueError):
+        cli.read_forecast_error_attributions_command()
+
+
+def test_read_forecast_error_attributions_command_uses_postgres_repository(monkeypatch):
+    class FakeRepository:
+        def __init__(self, dsn: str) -> None:
+            self.dsn = dsn
+
+        def read_forecast_error_attributions(self, horizon: str, limit: int):
+            assert horizon == "1W"
+            assert limit == 7
+            return [{"horizon": horizon, "limit": limit, "dsn": self.dsn}]
+
+    monkeypatch.setenv("DATABASE_URL", "postgres://example")
+    monkeypatch.setattr(cli, "PostgresRepository", FakeRepository)
+
+    rows = cli.read_forecast_error_attributions_command(horizon="1W", limit=7)
+
+    assert rows == [{"horizon": "1W", "limit": 7, "dsn": "postgres://example"}]
