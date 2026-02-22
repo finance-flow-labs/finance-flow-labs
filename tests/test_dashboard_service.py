@@ -25,6 +25,13 @@ class FakeDashboardRepo:
             "mean_abs_forecast_error": 0.031,
         }
 
+    def read_forecast_error_attributions(self, horizon="1M", limit=200):
+        return [
+            {"category": "macro_miss"},
+            {"category": "macro_miss"},
+            {"category": "valuation_miss"},
+        ]
+
 
 def test_dashboard_service_builds_operator_view_model():
     view = build_dashboard_view(FakeDashboardRepo())
@@ -34,4 +41,7 @@ def test_dashboard_service_builds_operator_view_model():
     assert view["counters"]["raw_events"] == 100
     assert view["learning_metrics"]["horizon"] == "1M"
     assert view["learning_metrics"]["hit_rate"] == 0.58
+    assert view["attribution_summary"]["total"] == 3
+    assert view["attribution_summary"]["top_category"] == "macro_miss"
+    assert view["attribution_summary"]["top_count"] == 2
     assert len(view["recent_runs"]) == 2
