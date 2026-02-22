@@ -1,4 +1,5 @@
 import os
+import math
 import importlib
 from collections.abc import Mapping
 
@@ -73,15 +74,20 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         if isinstance(value, int):
             return _metric(value)
         if isinstance(value, float):
+            if not math.isfinite(value):
+                return _metric("n/a", status="error", reason="non_finite_numeric")
             return _metric(int(value))
         if isinstance(value, str):
             try:
                 return _metric(int(value))
             except ValueError:
                 try:
-                    return _metric(int(float(value)))
+                    parsed = float(value)
                 except ValueError:
                     return _metric("n/a", status="error", reason="invalid_numeric")
+                if not math.isfinite(parsed):
+                    return _metric("n/a", status="error", reason="non_finite_numeric")
+                return _metric(int(parsed))
         return _metric("n/a", status="error", reason="unsupported_type")
 
     def to_pct_metric(value: object, precision: int) -> dict[str, object]:
@@ -103,6 +109,8 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
                 return _metric("n/a", status="error", reason="invalid_numeric")
         else:
             return _metric("n/a", status="error", reason="unsupported_type")
+        if not math.isfinite(raw):
+            return _metric("n/a", status="error", reason="non_finite_numeric")
         return _metric(f"{raw * 100:.{precision}f}%")
 
     counters = view.get("counters", {})

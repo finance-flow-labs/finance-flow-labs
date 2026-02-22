@@ -1,4 +1,5 @@
 import importlib
+import math
 
 
 dashboard_app = importlib.import_module("src.dashboard.app")
@@ -273,3 +274,27 @@ def test_dashboard_app_flags_primary_horizon_reliability_guardrail():
     assert cards["learning_metrics_panel"][1]["reliability_badge"] == "🔴 insufficient"
     assert "Realized sample below minimum" in cards["learning_metrics_panel"][1]["reliability_reason_text"]
     assert cards["learning_metrics_panel"][1]["status"] == "warn"
+
+
+def test_dashboard_app_marks_non_finite_numbers_as_error_not_crash():
+    cards = dashboard_app.build_operator_cards(
+        {
+            "counters": {
+                "raw_events": math.nan,
+            },
+            "learning_metrics": {
+                "realization_coverage": "NaN",
+                "hit_rate": math.inf,
+            },
+            "attribution_summary": {
+                "hard_evidence_coverage": "inf",
+            },
+        }
+    )
+
+    assert cards["raw_events"] == "n/a"
+    assert cards["coverage_pct"] == "n/a"
+    assert cards["hit_rate_pct"] == "n/a"
+    assert cards["hard_evidence_pct"] == "n/a"
+    assert cards["metric_status"]["raw_events"]["status"] == "error"
+    assert cards["metric_status"]["coverage_pct"]["reason"] == "non_finite_numeric"
