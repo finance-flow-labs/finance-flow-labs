@@ -2,6 +2,7 @@ import os
 import importlib
 from collections.abc import Mapping
 
+from src.ingestion.dashboard_service import REQUIRED_LEARNING_HORIZONS
 
 PLACEHOLDER_STRINGS = {"", "-", "n/a", "na", "none", "null", "unknown"}
 CRITICAL_METRIC_KEYS = {
@@ -138,15 +139,22 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
     horizon_rows: list[dict[str, object]] = []
     learning_by_horizon = view.get("learning_metrics_by_horizon", {})
     if isinstance(learning_by_horizon, Mapping):
-        for horizon in ("1W", "1M", "3M"):
+        for horizon in REQUIRED_LEARNING_HORIZONS:
             row = learning_by_horizon.get(horizon)
             if not isinstance(row, Mapping):
-                continue
+                row = {}
             row_forecast = to_int_metric(row.get("forecast_count"))
             row_realized = to_int_metric(row.get("realized_count"))
             row_coverage = to_pct_metric(row.get("realization_coverage"), precision=1)
             row_hit_rate = to_pct_metric(row.get("hit_rate"), precision=1)
             row_mae = to_pct_metric(row.get("mean_abs_forecast_error"), precision=2)
+            row_metrics = (row_forecast, row_realized, row_coverage, row_hit_rate, row_mae)
+            if all(metric["status"] == "ok" for metric in row_metrics):
+                row_status = "ok"
+            elif any(metric["status"] == "error" for metric in row_metrics):
+                row_status = "error"
+            else:
+                row_status = "unknown"
             horizon_rows.append(
                 {
                     "horizon": horizon,
@@ -155,21 +163,18 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
                     "coverage_pct": row_coverage["value"],
                     "hit_rate_pct": row_hit_rate["value"],
                     "mae_pct": row_mae["value"],
-                    "status": "ok"
-                    if all(
-                        metric["status"] == "ok"
-                        for metric in (row_forecast, row_realized, row_coverage, row_hit_rate, row_mae)
-                    )
-                    else "attention",
+                    "status": row_status,
                 }
             )
+
+    has_horizon_alert = any(row.get("status") != "ok" for row in horizon_rows)
 
     return {
         "last_run_status": str(view.get("last_run_status", "no-data")),
         "last_run_time": str(view.get("last_run_time", "")),
         **{k: v["value"] for k, v in metrics.items()},
         "metric_status": {k: {"status": v["status"], "reason": v["reason"]} for k, v in metrics.items()},
-        "has_critical_metric_alert": critical_unknown_or_error,
+        "has_critical_metric_alert": critical_unknown_or_error or has_horizon_alert,
         "learning_metrics_panel": horizon_rows,
     }
 

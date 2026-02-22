@@ -3,6 +3,9 @@ from collections import Counter
 from typing import Protocol
 
 
+REQUIRED_LEARNING_HORIZONS: tuple[str, ...] = ("1W", "1M", "3M")
+
+
 class DashboardRepositoryProtocol(Protocol):
     def read_latest_runs(self, limit: int = 20) -> list[dict[str, object]]: ...
 
@@ -97,7 +100,7 @@ def build_dashboard_view(
         {"raw_events": 0, "canonical_events": 0, "quarantine_events": 0},
         repository.read_status_counters,
     )
-    tracked_horizons = ("1W", "1M", "3M")
+    tracked_horizons = REQUIRED_LEARNING_HORIZONS
     learning_metrics_by_horizon = {
         horizon: _safe_repo_call(
             _default_learning_metrics(horizon),

@@ -3,6 +3,7 @@ import importlib
 
 dashboard_service = importlib.import_module("src.ingestion.dashboard_service")
 build_dashboard_view = dashboard_service.build_dashboard_view
+REQUIRED_LEARNING_HORIZONS = dashboard_service.REQUIRED_LEARNING_HORIZONS
 
 
 class FakeDashboardRepo:
@@ -48,6 +49,12 @@ class FakeDashboardRepo:
             {"category": "valuation_miss", "evidence_hard": [], "evidence_soft": [{"note": "narrative"}]},
             {"category": "unknown", "evidence_hard": [], "evidence_soft": []},
         ]
+
+
+def test_dashboard_service_uses_policy_locked_horizon_list():
+    view = build_dashboard_view(FakeDashboardRepo())
+
+    assert tuple(view["learning_metrics_by_horizon"].keys()) == REQUIRED_LEARNING_HORIZONS
 
 
 def test_dashboard_service_builds_operator_view_model():

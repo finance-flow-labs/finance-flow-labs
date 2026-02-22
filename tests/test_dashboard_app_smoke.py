@@ -150,6 +150,30 @@ def test_dashboard_app_parses_numeric_strings_for_percent_metrics():
     assert cards["evidence_gap_pct"] == "14.0%"
 
 
+def test_dashboard_app_flags_missing_required_horizon_metrics():
+    cards = dashboard_app.build_operator_cards(
+        {
+            "learning_metrics_by_horizon": {
+                "1M": {
+                    "horizon": "1M",
+                    "forecast_count": 25,
+                    "realized_count": 10,
+                    "realization_coverage": 0.4,
+                    "hit_rate": 0.6,
+                    "mean_abs_forecast_error": 0.025,
+                }
+            }
+        }
+    )
+
+    assert len(cards["learning_metrics_panel"]) == 3
+    assert cards["learning_metrics_panel"][0]["horizon"] == "1W"
+    assert cards["learning_metrics_panel"][0]["status"] == "unknown"
+    assert cards["learning_metrics_panel"][2]["horizon"] == "3M"
+    assert cards["learning_metrics_panel"][2]["status"] == "unknown"
+    assert cards["has_critical_metric_alert"] is True
+
+
 def test_dashboard_app_keeps_true_zero_values_as_ok_not_unknown():
     cards = dashboard_app.build_operator_cards(
         {
