@@ -426,3 +426,29 @@ def test_postgres_repository_reads_expected_vs_realized_with_evidence_fields():
     assert rows[0]["realization_id"] == 99
     assert rows[0]["forecast_evidence_hard"][0]["source"] == "fred"
     assert rows[0]["thesis_evidence_soft"][0]["source"] == "news"
+
+
+def test_postgres_repository_reads_forecast_error_category_stats():
+    cursor = FakeCursor(
+        fetch_rows=[
+            ("macro_miss", 4, -0.015, 0.018),
+            ("valuation_miss", 2, -0.006, 0.006),
+        ],
+        columns=[
+            "category",
+            "attribution_count",
+            "mean_contribution",
+            "mean_abs_contribution",
+        ],
+    )
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    rows = repo.read_forecast_error_category_stats(horizon="1M", limit=5)
+
+    sql, params = cursor.executed[0]
+    assert "FROM forecast_error_attributions fea" in sql
+    assert "GROUP BY fea.category" in sql
+    assert params == ("1M", 5)
+    assert rows[0]["category"] == "macro_miss"
+    assert rows[0]["attribution_count"] == 4

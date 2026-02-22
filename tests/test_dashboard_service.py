@@ -25,11 +25,20 @@ class FakeDashboardRepo:
             "mean_abs_forecast_error": 0.031,
         }
 
-    def read_forecast_error_attributions(self, horizon="1M", limit=200):
+    def read_forecast_error_category_stats(self, horizon="1M", limit=5):
         return [
-            {"category": "macro_miss"},
-            {"category": "macro_miss"},
-            {"category": "valuation_miss"},
+            {
+                "category": "macro_miss",
+                "attribution_count": 2,
+                "mean_contribution": -0.021,
+                "mean_abs_contribution": 0.021,
+            },
+            {
+                "category": "valuation_miss",
+                "attribution_count": 1,
+                "mean_contribution": -0.008,
+                "mean_abs_contribution": 0.008,
+            },
         ]
 
 
@@ -44,4 +53,6 @@ def test_dashboard_service_builds_operator_view_model():
     assert view["attribution_summary"]["total"] == 3
     assert view["attribution_summary"]["top_category"] == "macro_miss"
     assert view["attribution_summary"]["top_count"] == 2
+    assert len(view["attribution_summary"]["top_categories"]) == 2
+    assert view["attribution_summary"]["top_categories"][0]["mean_abs_contribution"] == 0.021
     assert len(view["recent_runs"]) == 2
