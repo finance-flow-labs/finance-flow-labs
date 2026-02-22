@@ -269,3 +269,37 @@ def test_create_forecast_record_command_rejects_empty_hard_evidence(monkeypatch)
             evidence_hard_json="[]",
             as_of="2026-02-22T00:00:00+00:00",
         )
+
+
+def test_cli_exposes_learning_bootstrap_command_with_defaults():
+    parser = cli.build_parser()
+    args = parser.parse_args(["learning-bootstrap", "--as-of", "2026-02-22T00:00:00+00:00"])
+
+    assert args.command == "learning-bootstrap"
+    assert args.horizons == "1W,1M,3M"
+    assert args.min_samples == "8,12,6"
+    assert args.dry_run is False
+
+
+def test_run_learning_bootstrap_command_dry_run_has_deterministic_plan():
+    result = cli.run_learning_bootstrap_command(
+        as_of="2026-02-22T00:00:00+00:00",
+        horizons="1W,1M",
+        min_samples="2,1",
+        dry_run=True,
+    )
+
+    assert result["dry_run"] is True
+    assert result["planned_rows"] == 3
+    assert result["plan"][0]["thesis_id"].startswith("bootstrap-1w-")
+
+
+def test_run_learning_bootstrap_command_requires_database_url_for_non_dry_run(monkeypatch):
+    monkeypatch.delenv("SUPABASE_DB_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    with pytest.raises(ValueError, match="DATABASE_URL"):
+        cli.run_learning_bootstrap_command(
+            as_of="2026-02-22T00:00:00+00:00",
+            dry_run=False,
+        )

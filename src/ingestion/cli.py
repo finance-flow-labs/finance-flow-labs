@@ -4,7 +4,7 @@ import json
 import os
 import urllib.request
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from .adapters.ecos import EcosAdapter
@@ -64,6 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
     _ = deploy_access_gate.add_argument("--timeout-seconds", type=float, default=15)
     _ = deploy_access_gate.add_argument("--attempts", type=int, default=3)
     _ = deploy_access_gate.add_argument("--backoff-seconds", type=float, default=0.5)
+
+    learning_bootstrap = subparsers.add_parser("learning-bootstrap")
+    _ = learning_bootstrap.add_argument("--as-of", required=True)
+    _ = learning_bootstrap.add_argument("--horizons", default="1W,1M,3M")
+    _ = learning_bootstrap.add_argument("--min-samples", default="8,12,6")
+    _ = learning_bootstrap.add_argument("--dry-run", action="store_true")
 
     return parser
 
@@ -301,6 +307,114 @@ def create_forecast_record_command(
     }
 
 
+def run_learning_bootstrap_command(
+    as_of: str,
+    horizons: str = "1W,1M,3M",
+    min_samples: str = "8,12,6",
+    dry_run: bool = False,
+) -> dict[str, object]:
+    as_of_dt = _parse_iso_datetime(as_of, "as_of")
+    horizon_list = [h.strip() for h in horizons.split(",") if h.strip()]
+    sample_list = [int(s.strip()) for s in min_samples.split(",") if s.strip()]
+    if len(horizon_list) != len(sample_list):
+        raise ValueError("horizons and min-samples must have the same number of items")
+
+    dsn = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
+    if not dsn and not dry_run:
+        raise ValueError("SUPABASE_DB_URL or DATABASE_URL is required")
+
+    plan: list[dict[str, object]] = []
+    horizon_days = {"1W": 7, "1M": 30, "3M": 90}
+    for horizon, sample_count in zip(horizon_list, sample_list):
+        if horizon not in horizon_days:
+            raise ValueError(f"unsupported horizon: {horizon}")
+        for idx in range(sample_count):
+            point_as_of = as_of_dt - timedelta(days=(idx + 1) * horizon_days[horizon])
+            plan.append(
+                {
+                    "horizon": horizon,
+                    "thesis_id": f"bootstrap-{horizon.lower()}-{idx + 1:02d}",
+                    "as_of": point_as_of,
+                    "evaluated_at": point_as_of + timedelta(days=horizon_days[horizon]),
+                    "expected_return_low": 0.01,
+                    "expected_return_high": 0.04,
+                    "realized_return": 0.025,
+                    "category": "unknown",
+                }
+            )
+
+    if dry_run:
+        return {"dry_run": True, "as_of": as_of_dt.isoformat(), "planned_rows": len(plan), "plan": plan}
+
+    repository = PostgresRepository(dsn=dsn)
+    upserted = 0
+    realized = 0
+    attributed = 0
+    for row in plan:
+        repository.write_investment_thesis(
+            {
+                "thesis_id": row["thesis_id"],
+                "scope_level": "portfolio",
+                "target_id": row["horizon"],
+                "title": f"Bootstrap {row['horizon']} sample",
+                "summary": "Deterministic bootstrap sample for learning-loop readiness",
+                "evidence_hard": [{"source": "bootstrap", "metric": "seed"}],
+                "evidence_soft": [],
+                "as_of": row["as_of"],
+                "lineage_id": "learning-bootstrap-v1",
+            }
+        )
+        forecast_id, _ = repository.write_forecast_record_idempotent(
+            {
+                "thesis_id": row["thesis_id"],
+                "horizon": row["horizon"],
+                "expected_return_low": row["expected_return_low"],
+                "expected_return_high": row["expected_return_high"],
+                "expected_volatility": 0.12,
+                "expected_drawdown": -0.08,
+                "confidence": 0.55,
+                "key_drivers": ["bootstrap:readiness"],
+                "evidence_hard": [{"source": "bootstrap", "metric": "seed"}],
+                "evidence_soft": [],
+                "as_of": row["as_of"],
+            }
+        )
+        upserted += 1
+
+        existing = repository.read_expected_vs_realized(horizon=str(row["horizon"]), limit=500)
+        if any(r.get("forecast_id") == forecast_id and r.get("realization_id") is not None for r in existing):
+            continue
+
+        realization_id = repository.write_realization_from_outcome(
+            forecast_id=forecast_id,
+            realized_return=float(row["realized_return"]),
+            realized_volatility=0.11,
+            max_drawdown=-0.06,
+            evaluated_at=row["evaluated_at"],
+        )
+        realized += 1
+        repository.write_forecast_error_attribution(
+            {
+                "realization_id": realization_id,
+                "category": row["category"],
+                "contribution": 0.0,
+                "note": "bootstrap seed",
+                "evidence_hard": [{"source": "bootstrap", "metric": "seed"}],
+                "evidence_soft": [],
+            }
+        )
+        attributed += 1
+
+    return {
+        "dry_run": False,
+        "as_of": as_of_dt.isoformat(),
+        "planned_rows": len(plan),
+        "forecast_upserts": upserted,
+        "realization_inserts": realized,
+        "attribution_inserts": attributed,
+    }
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -365,6 +479,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         gate = result.get("gate") if isinstance(result, dict) else None
         gate_ok = bool(gate.get("ok")) if isinstance(gate, dict) else False
         return 0 if gate_ok else 2
+
+    if args.command == "learning-bootstrap":
+        result = run_learning_bootstrap_command(
+            as_of=args.as_of,
+            horizons=args.horizons,
+            min_samples=args.min_samples,
+            dry_run=args.dry_run,
+        )
+        print(json.dumps(result, default=str))
+        return 0
 
     parser.print_help()
     return 1
