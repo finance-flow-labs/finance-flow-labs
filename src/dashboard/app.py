@@ -234,16 +234,30 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         and primary_horizon_row.get("reliability") in {"insufficient", "low_sample"}
     )
 
-    policy_compliance_panel = [
-        {
-            "policy_item": item,
-            "locked_value": locked_value,
-            "observed_value": "locked",
-            "status": "ok",
-            "note": "Policy lock v1.1",
+    policy_payload = view.get("policy_compliance", {})
+    policy_checks = policy_payload.get("checks") if isinstance(policy_payload, Mapping) else None
+    policy_summary = policy_payload.get("summary") if isinstance(policy_payload, Mapping) else None
+    if isinstance(policy_checks, list) and policy_checks:
+        policy_compliance_panel = policy_checks
+    else:
+        policy_compliance_panel = [
+            {
+                "check": item,
+                "status": "UNKNOWN",
+                "reason": "Compliance computation unavailable; showing locked policy rows only.",
+                "as_of": None,
+                "evidence": {"locked_value": locked_value},
+            }
+            for item, locked_value in LOCKED_POLICY_ROWS
+        ]
+    if not isinstance(policy_summary, Mapping):
+        policy_summary = {
+            "total": len(policy_compliance_panel),
+            "pass": 0,
+            "warn": 0,
+            "fail": 0,
+            "unknown": len(policy_compliance_panel),
         }
-        for item, locked_value in LOCKED_POLICY_ROWS
-    ]
 
     return {
         "last_run_status": str(view.get("last_run_status", "no-data")),
@@ -254,6 +268,7 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         "has_primary_horizon_reliability_alert": primary_horizon_reliability_alert,
         "learning_metrics_panel": horizon_rows,
         "policy_compliance_panel": policy_compliance_panel,
+        "policy_compliance_summary": dict(policy_summary),
     }
 
 
@@ -324,6 +339,14 @@ def run_streamlit_app(dsn: str) -> None:
     policy_panel = cards.get("policy_compliance_panel", [])
     if isinstance(policy_panel, list) and policy_panel:
         st.subheader("Policy Compliance (Locked Constraints)")
+        summary = cards.get("policy_compliance_summary", {})
+        if isinstance(summary, Mapping):
+            p1, p2, p3, p4, p5 = st.columns(5)
+            p1.metric("Total", summary.get("total", 0))
+            p2.metric("PASS", summary.get("pass", 0))
+            p3.metric("WARN", summary.get("warn", 0))
+            p4.metric("FAIL", summary.get("fail", 0))
+            p5.metric("UNKNOWN", summary.get("unknown", 0))
         st.dataframe(policy_panel, use_container_width=True)
 
     attribution_gap_rows = view.get("attribution_gap_rows", [])

@@ -96,6 +96,13 @@ Validation guardrails:
     - reliability badges: `🔴 insufficient`, `🟠 low_sample`, `🟢 reliable`
     - each row includes a human-readable reliability reason to prevent over-trusting sparse KPI samples
   - recent run history
+  - policy compliance block (PASS/WARN/FAIL/UNKNOWN):
+    - Universe coverage (US/KR/Crypto): currently validated via ingestion presence; region-level tagging dependency surfaced in evidence
+    - Crypto sleeve composition (BTC/ETH >=70%, alts <=30%): `UNKNOWN` until portfolio sleeve exposure feed exists
+    - Leverage sleeve cap (<=20%): `UNKNOWN` until portfolio leverage exposure feed exists
+    - Primary horizon readiness (1M): mapped from reliability state (`reliable`→PASS, `low_sample`→WARN, `insufficient`→FAIL)
+    - Benchmark readiness (QQQ/KOSPI200/BTC/SGOV): checks latest `macro_series_points` presence per component
+    - Summary counters shown for PASS/WARN/FAIL/UNKNOWN (no silent PASS on missing dependencies)
 - Reliability threshold env overrides:
   - `LEARNING_RELIABILITY_MIN_REALIZED_1W` (default: `8`)
   - `LEARNING_RELIABILITY_MIN_REALIZED_1M` (default: `12`)

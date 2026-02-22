@@ -7,6 +7,7 @@ from typing import Protocol
 REQUIRED_LEARNING_HORIZONS: tuple[str, ...] = ("1W", "1M", "3M")
 DEFAULT_MIN_REALIZED_BY_HORIZON: dict[str, int] = {"1W": 8, "1M": 12, "3M": 6}
 DEFAULT_COVERAGE_FLOOR: float = 0.4
+POLICY_CHECK_BENCHMARK_KEYS: tuple[str, ...] = ("QQQ", "KOSPI200", "BTC", "SGOV")
 
 
 class DashboardRepositoryProtocol(Protocol):
@@ -204,6 +205,124 @@ def _classify_learning_reliability(
     }
 
 
+def _build_policy_compliance(
+    repository: DashboardRepositoryProtocol,
+    counters: dict[str, object],
+    learning_metrics_by_horizon: dict[str, dict[str, object]],
+) -> dict[str, object]:
+    checks: list[dict[str, object]] = []
+
+    raw_events = int(counters.get("raw_events", 0) or 0)
+    canonical_events = int(counters.get("canonical_events", 0) or 0)
+    if raw_events > 0 and canonical_events > 0:
+        universe_status = "PASS"
+        universe_reason = "Data present; region-level US/KR/Crypto tagging pending."
+    else:
+        universe_status = "WARN"
+        universe_reason = "No ingest evidence; universe coverage cannot be validated."
+    checks.append(
+        {
+            "check": "Universe coverage (US/KR/Crypto)",
+            "status": universe_status,
+            "reason": universe_reason,
+            "as_of": None,
+            "evidence": {
+                "raw_events": raw_events,
+                "canonical_events": canonical_events,
+                "region_dimension_ready": False,
+            },
+        }
+    )
+
+    checks.append(
+        {
+            "check": "Crypto sleeve composition (BTC/ETH >=70%, alts <=30%)",
+            "status": "UNKNOWN",
+            "reason": "Portfolio crypto sleeve exposure feed not available.",
+            "as_of": None,
+            "evidence": {"dependency": "portfolio_exposure_crypto_sleeve"},
+        }
+    )
+    checks.append(
+        {
+            "check": "Leverage sleeve cap (<=20%)",
+            "status": "UNKNOWN",
+            "reason": "Portfolio leverage exposure feed not available.",
+            "as_of": None,
+            "evidence": {"dependency": "portfolio_exposure_leverage_sleeve"},
+        }
+    )
+
+    primary = learning_metrics_by_horizon.get("1M", {})
+    reliability = str(primary.get("reliability_state", "insufficient"))
+    if reliability == "reliable":
+        primary_status = "PASS"
+    elif reliability == "low_sample":
+        primary_status = "WARN"
+    else:
+        primary_status = "FAIL"
+    checks.append(
+        {
+            "check": "Primary horizon readiness (1M)",
+            "status": primary_status,
+            "reason": str(primary.get("reliability_reason", "missing_reliability_metadata")),
+            "as_of": None,
+            "evidence": {
+                "reliability_state": reliability,
+                "realized_count": primary.get("realized_count", 0),
+                "min_realized_required": primary.get("min_realized_required"),
+                "realization_coverage": primary.get("realization_coverage"),
+            },
+        }
+    )
+
+    benchmark_points: dict[str, int] = {}
+    benchmark_as_of: dict[str, object] = {}
+    if hasattr(repository, "read_macro_series_points"):
+        for key in POLICY_CHECK_BENCHMARK_KEYS:
+            points = _safe_repo_call([], repository.read_macro_series_points, metric_key=key, limit=1)
+            if isinstance(points, list) and points:
+                benchmark_points[key] = len(points)
+                top = points[0] if isinstance(points[0], dict) else {}
+                benchmark_as_of[key] = top.get("as_of")
+            else:
+                benchmark_points[key] = 0
+                benchmark_as_of[key] = None
+    else:
+        benchmark_points = {key: 0 for key in POLICY_CHECK_BENCHMARK_KEYS}
+        benchmark_as_of = {key: None for key in POLICY_CHECK_BENCHMARK_KEYS}
+
+    missing_keys = [key for key, count in benchmark_points.items() if count == 0]
+    if missing_keys:
+        benchmark_status = "WARN"
+        benchmark_reason = f"Missing benchmark series: {', '.join(missing_keys)}"
+    else:
+        benchmark_status = "PASS"
+        benchmark_reason = "All benchmark components have recent points."
+
+    checks.append(
+        {
+            "check": "Benchmark readiness (QQQ/KOSPI200/BTC/SGOV)",
+            "status": benchmark_status,
+            "reason": benchmark_reason,
+            "as_of": max([v for v in benchmark_as_of.values() if v is not None], default=None),
+            "evidence": {
+                "series_point_count": benchmark_points,
+                "series_latest_as_of": benchmark_as_of,
+            },
+        }
+    )
+
+    summary = {
+        "total": len(checks),
+        "pass": sum(1 for row in checks if row["status"] == "PASS"),
+        "warn": sum(1 for row in checks if row["status"] == "WARN"),
+        "fail": sum(1 for row in checks if row["status"] == "FAIL"),
+        "unknown": sum(1 for row in checks if row["status"] == "UNKNOWN"),
+    }
+    return {"checks": checks, "summary": summary}
+
+
 def build_dashboard_view(
     repository: DashboardRepositoryProtocol,
     limit: int = 20,
@@ -374,5 +493,10 @@ def build_dashboard_view(
         },
         "attribution_summary": attribution_summary,
         "attribution_gap_rows": attribution_gap_rows,
+        "policy_compliance": _build_policy_compliance(
+            repository=repository,
+            counters=counters if isinstance(counters, dict) else {},
+            learning_metrics_by_horizon=learning_metrics_by_horizon,
+        ),
         "recent_runs": recent_runs,
     }
