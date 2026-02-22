@@ -93,6 +93,8 @@ Validation guardrails:
   - last run status/time
   - raw/canonical/quarantine counters
   - multi-horizon learning metrics with reliability guardrails (`insufficient` / `low_sample` / `reliable`)
+    - reliability badges: `🔴 insufficient`, `🟠 low_sample`, `🟢 reliable`
+    - each row includes a human-readable reliability reason to prevent over-trusting sparse KPI samples
   - recent run history
 - Reliability threshold env overrides:
   - `LEARNING_RELIABILITY_MIN_REALIZED_1W` (default: `8`)
