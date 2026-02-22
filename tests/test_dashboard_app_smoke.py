@@ -136,15 +136,15 @@ def test_dashboard_app_parses_numeric_strings_for_percent_metrics():
         {
             "learning_metrics": {
                 "realization_coverage": "0.4",
-                "hit_rate": "0.6",
-                "mean_abs_forecast_error": "0.025",
+                "hit_rate": "60%",
+                "mean_abs_forecast_error": "2.5%",
                 "mean_signed_forecast_error": "-0.007",
             },
             "attribution_summary": {
                 "hard_evidence_coverage": "0.86",
-                "hard_evidence_traceability_coverage": "0.71",
+                "hard_evidence_traceability_coverage": "71%",
                 "soft_evidence_coverage": "0.57",
-                "evidence_gap_coverage": "0.14",
+                "evidence_gap_coverage": "14%",
             },
         }
     )
