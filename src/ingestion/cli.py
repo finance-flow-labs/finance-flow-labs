@@ -51,6 +51,10 @@ def build_parser() -> argparse.ArgumentParser:
     _ = forecast_record_create.add_argument("--evidence-soft-json", default="[]")
     _ = forecast_record_create.add_argument("--as-of", required=True)
 
+    streamlit_access_check = subparsers.add_parser("streamlit-access-check")
+    _ = streamlit_access_check.add_argument("--url", required=True)
+    _ = streamlit_access_check.add_argument("--timeout-seconds", type=float, default=15)
+
     return parser
 
 
@@ -183,6 +187,13 @@ def read_forecast_error_category_stats_command(
     return repository.read_forecast_error_category_stats(horizon=horizon, limit=limit)
 
 
+def run_streamlit_access_check_command(url: str, timeout_seconds: float = 15) -> dict[str, object]:
+    streamlit_access = importlib.import_module("src.ingestion.streamlit_access")
+    check_streamlit_access = streamlit_access.check_streamlit_access
+    result = check_streamlit_access(url=url, timeout_seconds=timeout_seconds)
+    return result.to_dict()
+
+
 def create_forecast_record_command(
     thesis_id: str,
     horizon: str,
@@ -276,6 +287,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         )
         print(json.dumps(row, default=str))
         return 0
+
+    if args.command == "streamlit-access-check":
+        result = run_streamlit_access_check_command(
+            url=args.url,
+            timeout_seconds=args.timeout_seconds,
+        )
+        print(json.dumps(result, default=str))
+        return 0 if bool(result.get("ok")) else 2
 
     parser.print_help()
     return 1

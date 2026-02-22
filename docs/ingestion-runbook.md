@@ -118,4 +118,24 @@ Validation guardrails:
 4. Select branch: `main`.
 5. Set Main file path: `streamlit_app.py`.
 6. Set Secret: `SUPABASE_DB_URL` (or `DATABASE_URL`).
-7. Deploy and copy the generated app URL (`https://<app-name>.streamlit.app`).
+7. **Access policy:** set app visibility to the intended operator mode.
+   - Default production contract: `Public` (unauthenticated dashboard shell must be reachable).
+   - If restricted mode is required, deployment owner must document explicit access instructions and expected operator accounts.
+8. Deploy and copy the generated app URL (`https://<app-name>.streamlit.app`).
+
+### Dashboard access contract smoke check
+
+Run from CI or post-deploy:
+
+```bash
+python3 -m src.ingestion.cli streamlit-access-check --url https://finance-flow-labs.streamlit.app/
+```
+
+Expected behavior:
+- Exit code `0`: app shell reachable and no Streamlit auth-wall redirect detected.
+- Exit code `2`: access contract broken (e.g., redirected to `https://share.streamlit.io/-/auth/app`).
+
+Operational response when check fails:
+1. Verify Streamlit app visibility/access policy in deployment settings.
+2. Re-run check from a clean network session.
+3. If intentionally restricted, update this runbook + monitoring expectation and provide operator login instructions.
