@@ -40,6 +40,16 @@ class PostgresRepository:
             connection_factory
         )
 
+    @staticmethod
+    def _require_hard_evidence(
+        evidence_hard: object,
+        context: str,
+    ) -> None:
+        if not isinstance(evidence_hard, list) or len(evidence_hard) == 0:
+            raise ValueError(
+                f"{context} requires non-empty evidence_hard (HARD evidence)"
+            )
+
     def _connect(self) -> ConnectionProtocol:
         if self._connection_factory is not None:
             return self._connection_factory()
@@ -166,6 +176,10 @@ class PostgresRepository:
         return [dict(zip(columns, row)) for row in rows]
 
     def write_investment_thesis(self, thesis: Mapping[str, object]) -> str:
+        self._require_hard_evidence(
+            thesis.get("evidence_hard"),
+            "investment thesis",
+        )
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()
         cursor.execute(
@@ -214,6 +228,10 @@ class PostgresRepository:
         return str(row[0])
 
     def write_forecast_record(self, record: Mapping[str, object]) -> int:
+        self._require_hard_evidence(
+            record.get("evidence_hard"),
+            "forecast record",
+        )
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()
         cursor.execute(
