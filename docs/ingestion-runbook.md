@@ -58,6 +58,33 @@ Environment variables:
   - `read_latest_macro_analysis(limit)`
 - 저장 필드에는 `regime`, `confidence`, `base/bull/bear`, `policy_case`, `critic_case`, `reason_codes`, `risk_flags`, `triggers`, `narrative`, `model` 포함
 
+## Forecast Capture (operator-safe)
+
+Use CLI (no direct SQL) to create/update a forecast record with schema validation and idempotency (`thesis_id + horizon + as_of`).
+
+Example:
+
+```bash
+python3 -m src.ingestion.cli forecast-record-create \
+  --thesis-id thesis-aapl-2026q1 \
+  --horizon 1M \
+  --expected-return-low 0.03 \
+  --expected-return-high 0.09 \
+  --expected-volatility 0.20 \
+  --expected-drawdown 0.12 \
+  --confidence 0.68 \
+  --key-drivers-json '["macro:disinflation","sector:semis"]' \
+  --evidence-hard-json '[{"source":"fred","metric":"CPI","as_of":"2026-02-20"}]' \
+  --evidence-soft-json '[{"source":"news","note":"earnings-call tone improved"}]' \
+  --as-of 2026-02-22T00:00:00+00:00
+```
+
+Validation guardrails:
+- `expected_return_low <= expected_return_high`
+- `confidence` must be between `0` and `1`
+- `--as-of` must be timezone-aware ISO-8601
+- `--evidence-hard-json` must be non-empty JSON array (HARD evidence required)
+
 ## Operator Dashboard
 
 - Run: `streamlit run src/dashboard/app.py`

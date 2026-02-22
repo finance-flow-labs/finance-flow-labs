@@ -82,3 +82,78 @@ def test_read_forecast_error_attributions_command_uses_postgres_repository(monke
     rows = cli.read_forecast_error_attributions_command(horizon="1W", limit=7)
 
     assert rows == [{"horizon": "1W", "limit": 7, "dsn": "postgres://example"}]
+
+
+def test_cli_exposes_forecast_record_create_command():
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "forecast-record-create",
+            "--thesis-id",
+            "thesis-1",
+            "--horizon",
+            "1M",
+            "--expected-return-low",
+            "0.01",
+            "--expected-return-high",
+            "0.05",
+            "--confidence",
+            "0.7",
+            "--evidence-hard-json",
+            "[]",
+            "--as-of",
+            "2026-02-22T00:00:00+00:00",
+        ]
+    )
+
+    assert args.command == "forecast-record-create"
+    assert args.thesis_id == "thesis-1"
+
+
+def test_create_forecast_record_command_uses_idempotent_repository(monkeypatch):
+    class FakeRepository:
+        def __init__(self, dsn: str) -> None:
+            self.dsn = dsn
+
+        def write_forecast_record_idempotent(self, payload):
+            assert payload["thesis_id"] == "thesis-1"
+            assert payload["horizon"] == "1M"
+            assert payload["expected_return_low"] == 0.02
+            assert payload["expected_return_high"] == 0.08
+            assert payload["confidence"] == 0.6
+            assert payload["key_drivers"] == ["macro:disinflation"]
+            assert payload["evidence_hard"][0]["source"] == "fred"
+            return (77, True)
+
+    monkeypatch.setenv("DATABASE_URL", "postgres://example")
+    monkeypatch.setattr(cli, "PostgresRepository", FakeRepository)
+
+    row = cli.create_forecast_record_command(
+        thesis_id="thesis-1",
+        horizon="1M",
+        expected_return_low=0.02,
+        expected_return_high=0.08,
+        confidence=0.6,
+        key_drivers_json='["macro:disinflation"]',
+        evidence_hard_json='[{"source":"fred","metric":"CPI"}]',
+        evidence_soft_json='[{"source":"news","note":"tone"}]',
+        as_of="2026-02-22T00:00:00+00:00",
+    )
+
+    assert row == {"forecast_id": 77, "deduplicated": True, "thesis_id": "thesis-1", "horizon": "1M"}
+
+
+def test_create_forecast_record_command_rejects_invalid_range(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgres://example")
+
+    with pytest.raises(ValueError):
+        cli.create_forecast_record_command(
+            thesis_id="thesis-1",
+            horizon="1M",
+            expected_return_low=0.09,
+            expected_return_high=0.08,
+            confidence=0.6,
+            key_drivers_json="[]",
+            evidence_hard_json='[{"source":"fred"}]',
+            as_of="2026-02-22T00:00:00+00:00",
+        )

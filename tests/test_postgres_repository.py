@@ -154,7 +154,7 @@ def test_postgres_repository_writes_investment_thesis_and_returns_id():
 
 
 def test_postgres_repository_writes_forecast_record_and_returns_id():
-    cursor = FakeCursor(fetch_one_rows=[(42,)])
+    cursor = FakeCursor(fetch_one_rows=[(42, True)])
     conn = FakeConnection(cursor)
     repo = PostgresRepository(connection_factory=lambda: conn)
 
@@ -176,7 +176,33 @@ def test_postgres_repository_writes_forecast_record_and_returns_id():
 
     assert forecast_id == 42
     assert "INSERT INTO forecast_records" in cursor.executed[0][0]
+    assert "ON CONFLICT (thesis_id, horizon, as_of)" in cursor.executed[0][0]
     assert conn.committed is True
+
+
+def test_postgres_repository_writes_forecast_record_idempotent_and_flags_dedup():
+    cursor = FakeCursor(fetch_one_rows=[(42, False)])
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    forecast_id, deduplicated = repo.write_forecast_record_idempotent(
+        {
+            "thesis_id": "thesis-1",
+            "horizon": "1M",
+            "expected_return_low": 0.04,
+            "expected_return_high": 0.10,
+            "expected_volatility": 0.2,
+            "expected_drawdown": 0.12,
+            "confidence": 0.7,
+            "key_drivers": ["macro:disinflation"],
+            "evidence_hard": [{"source": "fred", "metric": "CPI"}],
+            "evidence_soft": [{"source": "news", "note": "AI capex sentiment"}],
+            "as_of": "2026-02-22T00:00:00+00:00",
+        }
+    )
+
+    assert forecast_id == 42
+    assert deduplicated is True
 
 
 def test_postgres_repository_rejects_investment_thesis_without_hard_evidence():
