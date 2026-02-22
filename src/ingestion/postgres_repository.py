@@ -580,6 +580,57 @@ class PostgresRepository:
             "quarantine_events": to_int(quarantine_row[0]),
         }
 
+    def read_learning_metrics(self, horizon: str = "1M") -> dict[str, object]:
+        """Return realized forecast quality metrics for learning-loop monitoring."""
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*) AS realized_count,
+                AVG(CASE WHEN rr.hit THEN 1.0 ELSE 0.0 END) AS hit_rate,
+                AVG(ABS(rr.forecast_error)) AS mean_abs_forecast_error
+            FROM realization_records rr
+            JOIN forecast_records fr ON fr.id = rr.forecast_id
+            WHERE fr.horizon = %s
+            """,
+            (horizon,),
+        )
+        row = cursor.fetchone() or (0, None, None)
+
+        cursor.close()
+        conn.close()
+
+        def to_int(value: object) -> int:
+            if isinstance(value, bool):
+                return int(value)
+            if isinstance(value, int):
+                return value
+            if isinstance(value, float):
+                return int(value)
+            if isinstance(value, str):
+                return int(value)
+            return 0
+
+        def to_float_or_none(value: object) -> Optional[float]:
+            if value is None:
+                return None
+            if isinstance(value, bool):
+                return float(int(value))
+            if isinstance(value, (int, float)):
+                return float(value)
+            if isinstance(value, str):
+                return float(value)
+            return None
+
+        return {
+            "horizon": horizon,
+            "realized_count": to_int(row[0]),
+            "hit_rate": to_float_or_none(row[1]),
+            "mean_abs_forecast_error": to_float_or_none(row[2]),
+        }
+
     def write_macro_series_points(self, points: list[NormalizedSeriesPoint]) -> int:
         if not points:
             return 0
