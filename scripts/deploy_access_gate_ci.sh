@@ -11,49 +11,83 @@ cleanup() {
 }
 trap cleanup EXIT
 
-python3 -m src.ingestion.cli deploy-access-gate \
-  --url "$URL" \
-  --mode "$MODE" \
-  ${LOGIN_PATH:+--restricted-login-path "$LOGIN_PATH"} >"$TMP_JSON"
-
-cat "$TMP_JSON"
-
-python3 - "$TMP_JSON" <<'PY'
+python3 - "$URL" "$MODE" "$LOGIN_PATH" "$TMP_JSON" <<'PY'
 import json
+import subprocess
 import sys
 from pathlib import Path
 
-path = Path(sys.argv[1])
-payload = json.loads(path.read_text(encoding="utf-8"))
-access = payload.get("access_check", {})
-gate = payload.get("gate", {})
+url = sys.argv[1]
+mode = sys.argv[2]
+login_path = sys.argv[3]
+out_path = Path(sys.argv[4])
 
-reason = str(gate.get("reason") or access.get("reason") or "unknown")
-severity = str(gate.get("severity") or access.get("alert_severity") or "unknown")
-hint = str(gate.get("remediation_hint") or access.get("remediation_hint") or "")
-release_blocker = bool(gate.get("release_blocker"))
-mode = str(payload.get("deploy_access_mode") or "public")
+routes = [
+    ("default", url),
+    ("enduser", f"{url}?view=enduser"),
+    ("operator", f"{url}?view=operator"),
+]
 
-print(f"[deploy-access-gate] mode={mode} release_blocker={release_blocker} reason={reason} severity={severity}")
-if hint:
-    print(f"[deploy-access-gate] hint={hint}")
+results: list[dict[str, object]] = []
+release_blocker = False
 
-summary_path = Path("deploy_access_gate_summary.md")
-summary_path.write_text(
-    "\n".join(
-        [
-            "## Deploy Access Gate",
-            f"- mode: `{mode}`",
-            f"- release_blocker: `{str(release_blocker).lower()}`",
-            f"- reason: `{reason}`",
-            f"- severity: `{severity}`",
-            f"- hint: {hint or '(none)' }",
-        ]
+for label, route_url in routes:
+    cmd = [
+        "python3",
+        "-m",
+        "src.ingestion.cli",
+        "deploy-access-gate",
+        "--url",
+        route_url,
+        "--mode",
+        mode,
+    ]
+    if login_path:
+        cmd += ["--restricted-login-path", login_path]
+
+    proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    payload = json.loads(proc.stdout)
+
+    access = payload.get("access_check", {})
+    gate = payload.get("gate", {})
+    reason = str(gate.get("reason") or access.get("reason") or "unknown")
+    severity = str(gate.get("severity") or access.get("alert_severity") or "unknown")
+    hint = str(gate.get("remediation_hint") or access.get("remediation_hint") or "")
+    is_blocker = bool(gate.get("release_blocker"))
+    release_blocker = release_blocker or is_blocker
+
+    print(
+        f"[deploy-access-gate:{label}] mode={mode} release_blocker={is_blocker} reason={reason} severity={severity}"
     )
-    + "\n",
-    encoding="utf-8",
-)
+    if hint:
+        print(f"[deploy-access-gate:{label}] hint={hint}")
+
+    results.append(
+        {
+            "route": label,
+            "url": route_url,
+            "release_blocker": is_blocker,
+            "reason": reason,
+            "severity": severity,
+            "hint": hint,
+        }
+    )
+
+summary_lines = ["## Deploy Access Gate", f"- mode: `{mode}`", "- routes:"]
+for item in results:
+    summary_lines.append(
+        "  - "
+        + f"{item['route']}: blocker=`{str(item['release_blocker']).lower()}` "
+        + f"reason=`{item['reason']}` severity=`{item['severity']}`"
+    )
+    if item["hint"]:
+        summary_lines.append(f"    - hint: {item['hint']}")
+
+Path("deploy_access_gate_summary.md").write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+out_path.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
 
 if release_blocker:
-    sys.exit(2)
+    raise SystemExit(2)
 PY
+
+cat "$TMP_JSON"
