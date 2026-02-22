@@ -32,12 +32,14 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         realization_coverage = learning.get("realization_coverage")
         hit_rate = learning.get("hit_rate")
         mae = learning.get("mean_abs_forecast_error")
+        signed_error = learning.get("mean_signed_forecast_error")
     else:
         forecast_count = 0
         realized_count = 0
         realization_coverage = None
         hit_rate = None
         mae = None
+        signed_error = None
 
     attribution_summary = view.get("attribution_summary", {})
     if isinstance(attribution_summary, Mapping):
@@ -64,6 +66,9 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
     coverage_pct = "n/a" if not isinstance(realization_coverage, (int, float)) else f"{realization_coverage * 100:.1f}%"
     hit_rate_pct = "n/a" if not isinstance(hit_rate, (int, float)) else f"{hit_rate * 100:.1f}%"
     mae_pct = "n/a" if not isinstance(mae, (int, float)) else f"{mae * 100:.2f}%"
+    signed_error_pct = (
+        "n/a" if not isinstance(signed_error, (int, float)) else f"{signed_error * 100:.2f}%"
+    )
     hard_evidence_pct = "n/a" if not isinstance(hard_evidence_coverage, (int, float)) else f"{hard_evidence_coverage * 100:.1f}%"
     hard_evidence_traceability_pct = (
         "n/a"
@@ -84,6 +89,7 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         "coverage_pct": coverage_pct,
         "hit_rate_pct": hit_rate_pct,
         "mae_pct": mae_pct,
+        "signed_error_pct": signed_error_pct,
         "attribution_total": attribution_total,
         "attribution_top_category": top_category,
         "attribution_top_count": top_count,
@@ -113,7 +119,7 @@ def run_streamlit_app(dsn: str) -> None:
     st.title("Ingestion Operator Dashboard")
     st.caption("Manual update monitoring (cron separated)")
 
-    c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15 = st.columns(15)
+    c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16 = st.columns(16)
     c1.metric("Last Status", cards["last_run_status"], cards["last_run_time"])
     c2.metric("Raw", cards["raw_events"])
     c3.metric("Canonical", cards["canonical_events"])
@@ -123,12 +129,13 @@ def run_streamlit_app(dsn: str) -> None:
     c7.metric("1M Coverage", cards["coverage_pct"])
     c8.metric("1M Hit Rate", cards["hit_rate_pct"])
     c9.metric("1M MAE", cards["mae_pct"])
-    c10.metric("1M Attr", cards["attribution_total"])
-    c11.metric("Top Attr", cards["attribution_top_category"], cards["attribution_top_count"])
-    c12.metric("HARD Evd", cards["hard_evidence_pct"])
-    c13.metric("HARD Trace", cards["hard_evidence_traceability_pct"])
-    c14.metric("SOFT Evd", cards["soft_evidence_pct"])
-    c15.metric("No-Evd Attr", cards["evidence_gap_count"], cards["evidence_gap_pct"])
+    c10.metric("1M Bias", cards["signed_error_pct"])
+    c11.metric("1M Attr", cards["attribution_total"])
+    c12.metric("Top Attr", cards["attribution_top_category"], cards["attribution_top_count"])
+    c13.metric("HARD Evd", cards["hard_evidence_pct"])
+    c14.metric("HARD Trace", cards["hard_evidence_traceability_pct"])
+    c15.metric("SOFT Evd", cards["soft_evidence_pct"])
+    c16.metric("No-Evd Attr", cards["evidence_gap_count"], cards["evidence_gap_pct"])
 
     recent_runs = view.get("recent_runs", [])
     if isinstance(recent_runs, list) and recent_runs:
