@@ -157,3 +157,19 @@ def test_create_forecast_record_command_rejects_invalid_range(monkeypatch):
             evidence_hard_json='[{"source":"fred"}]',
             as_of="2026-02-22T00:00:00+00:00",
         )
+
+
+def test_create_forecast_record_command_rejects_empty_hard_evidence(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgres://example")
+
+    with pytest.raises(ValueError, match="non-empty"):
+        cli.create_forecast_record_command(
+            thesis_id="thesis-1",
+            horizon="1M",
+            expected_return_low=0.01,
+            expected_return_high=0.03,
+            confidence=0.6,
+            key_drivers_json="[]",
+            evidence_hard_json="[]",
+            as_of="2026-02-22T00:00:00+00:00",
+        )
