@@ -60,7 +60,7 @@ def test_dashboard_app_builds_cards_from_view_model():
     assert cards["evidence_gap_pct"] == "14.0%"
 
 
-def test_dashboard_app_handles_non_numeric_counter_strings_safely():
+def test_dashboard_app_treats_malformed_count_metrics_as_unknown():
     cards = dashboard_app.build_operator_cards(
         {
             "counters": {
@@ -80,14 +80,14 @@ def test_dashboard_app_handles_non_numeric_counter_strings_safely():
         }
     )
 
-    assert cards["raw_events"] == 0
-    assert cards["canonical_events"] == 0
-    assert cards["quarantine_events"] == 0
-    assert cards["forecast_count"] == 0
-    assert cards["realized_count"] == 0
-    assert cards["attribution_total"] == 0
-    assert cards["attribution_top_count"] == 0
-    assert cards["evidence_gap_count"] == 0
+    assert cards["raw_events"] == "n/a"
+    assert cards["canonical_events"] == "n/a"
+    assert cards["quarantine_events"] == "n/a"
+    assert cards["forecast_count"] == "n/a"
+    assert cards["realized_count"] == "n/a"
+    assert cards["attribution_total"] == "n/a"
+    assert cards["attribution_top_count"] == "n/a"
+    assert cards["evidence_gap_count"] == "n/a"
 
 
 def test_dashboard_app_parses_numeric_strings_for_percent_metrics():
