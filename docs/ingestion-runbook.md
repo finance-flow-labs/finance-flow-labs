@@ -65,7 +65,13 @@ Environment variables:
 - Dashboard shows:
   - last run status/time
   - raw/canonical/quarantine counters
+  - multi-horizon learning metrics with reliability guardrails (`insufficient` / `low_sample` / `reliable`)
   - recent run history
+- Reliability threshold env overrides:
+  - `LEARNING_RELIABILITY_MIN_REALIZED_1W` (default: `8`)
+  - `LEARNING_RELIABILITY_MIN_REALIZED_1M` (default: `12`)
+  - `LEARNING_RELIABILITY_MIN_REALIZED_3M` (default: `6`)
+  - `LEARNING_RELIABILITY_COVERAGE_FLOOR` (default: `0.4`)
 
 ### Streamlit Community Cloud Deployment
 
