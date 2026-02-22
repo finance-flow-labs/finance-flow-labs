@@ -43,6 +43,11 @@ class FakeConnection:
         return None
 
 
+class ExplodingCursor(FakeCursor):
+    def execute(self, sql, params=None):
+        raise RuntimeError("simulated undefined table")
+
+
 def test_postgres_repository_builds_insert_payload_for_run_history():
     cursor = FakeCursor()
     conn = FakeConnection(cursor)
@@ -508,3 +513,26 @@ def test_postgres_repository_reads_forecast_error_category_stats():
     assert params == ("1M", 5)
     assert rows[0]["category"] == "macro_miss"
     assert rows[0]["attribution_count"] == 4
+
+
+def test_postgres_repository_learning_reads_fallback_when_tables_missing():
+    cursor = ExplodingCursor()
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    assert repo.read_latest_runs(limit=5) == []
+    assert repo.read_status_counters() == {
+        "raw_events": 0,
+        "canonical_events": 0,
+        "quarantine_events": 0,
+    }
+
+    metrics = repo.read_learning_metrics(horizon="1M")
+    assert metrics["horizon"] == "1M"
+    assert metrics["forecast_count"] == 0
+    assert metrics["realized_count"] == 0
+    assert metrics["realization_coverage"] is None
+
+    assert repo.read_forecast_error_attributions(horizon="1M", limit=10) == []
+    assert repo.read_expected_vs_realized(horizon="1M", limit=10) == []
+    assert repo.read_forecast_error_category_stats(horizon="1M", limit=10) == []
