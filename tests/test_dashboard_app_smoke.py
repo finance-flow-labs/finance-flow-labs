@@ -20,7 +20,9 @@ def test_dashboard_app_builds_cards_from_view_model():
             },
             "learning_metrics": {
                 "horizon": "1M",
+                "forecast_count": 25,
                 "realized_count": 10,
+                "realization_coverage": 0.4,
                 "hit_rate": 0.6,
                 "mean_abs_forecast_error": 0.025,
             },
@@ -31,6 +33,8 @@ def test_dashboard_app_builds_cards_from_view_model():
     assert cards["last_run_status"] == "success"
     assert cards["raw_events"] == 100
     assert cards["quarantine_events"] == 10
+    assert cards["forecast_count"] == 25
     assert cards["realized_count"] == 10
+    assert cards["coverage_pct"] == "40.0%"
     assert cards["hit_rate_pct"] == "60.0%"
     assert cards["mae_pct"] == "2.50%"
