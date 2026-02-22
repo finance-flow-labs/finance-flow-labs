@@ -185,3 +185,14 @@ Rollback steps (when a recent deployment introduced auth-wall regression):
   - Set `OUTPUT_JSON_PATH` to persist gate output JSON while keeping stdout logs.
   - Example: `OUTPUT_JSON_PATH=deploy_access_gate.json ./scripts/streamlit_access_smoke_check.sh`
   - Use captured payload fields for operator audit (`access_check.reason`, `access_check.alert_severity`, `access_check.remediation_hint`).
+
+### CI release gate helper
+
+- Script: `./scripts/deploy_access_gate_ci.sh`
+- Intended for CI/deploy runners to:
+  - print full JSON gate payload,
+  - emit structured summary (`mode`, `release_blocker`, `reason`, `severity`, `hint`),
+  - exit `2` when `gate.release_blocker=true`.
+- Persist outputs in pipeline artifacts/logs:
+  - raw stdout JSON (e.g., `deploy_access_gate.json`)
+  - generated summary file: `deploy_access_gate_summary.md`
