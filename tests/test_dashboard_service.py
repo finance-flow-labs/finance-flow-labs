@@ -1,5 +1,7 @@
 import importlib
 
+import pytest
+
 
 dashboard_service = importlib.import_module("src.ingestion.dashboard_service")
 build_dashboard_view = dashboard_service.build_dashboard_view
@@ -68,6 +70,9 @@ def test_dashboard_service_builds_operator_view_model():
     assert view["learning_metrics_by_horizon"]["1W"]["horizon"] == "1W"
     assert view["learning_metrics_by_horizon"]["1M"]["horizon"] == "1M"
     assert view["learning_metrics_by_horizon"]["3M"]["horizon"] == "3M"
+    assert view["learning_metrics_by_horizon"]["1M"]["reliability_state"] == "low_sample"
+    assert "realized_count_low_sample" in view["learning_metrics_by_horizon"]["1M"]["reliability_reason"]
+    assert view["learning_reliability_by_horizon"]["1W"]["min_realized_required"] == 8
     assert view["attribution_summary"]["total"] == 4
     assert view["attribution_summary"]["top_category"] == "macro_miss"
     assert view["attribution_summary"]["top_count"] == 2
@@ -194,3 +199,25 @@ def test_dashboard_service_parses_object_evidence_payloads():
     assert summary["soft_evidence_coverage"] == 0.5
     assert summary["evidence_gap_count"] == 0
     assert summary["evidence_gap_coverage"] == 0.0
+
+
+def test_dashboard_service_learning_reliability_threshold_env_override(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LEARNING_RELIABILITY_MIN_REALIZED_1M", "10")
+    monkeypatch.setenv("LEARNING_RELIABILITY_COVERAGE_FLOOR", "0.65")
+
+    class CoverageWeakRepo(FakeDashboardRepo):
+        def read_learning_metrics(self, horizon="1M"):
+            return {
+                "horizon": horizon,
+                "forecast_count": 30,
+                "realized_count": 20,
+                "realization_coverage": 0.6,
+                "hit_rate": 0.57,
+                "mean_abs_forecast_error": 0.028,
+            }
+
+    view = build_dashboard_view(CoverageWeakRepo())
+    rel = view["learning_metrics_by_horizon"]["1M"]
+    assert rel["reliability_state"] == "low_sample"
+    assert "coverage_below_floor" in rel["reliability_reason"]
+    assert rel["min_realized_required"] == 10

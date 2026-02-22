@@ -1,9 +1,12 @@
 import json
+import os
 from collections import Counter
 from typing import Protocol
 
 
 REQUIRED_LEARNING_HORIZONS: tuple[str, ...] = ("1W", "1M", "3M")
+DEFAULT_MIN_REALIZED_BY_HORIZON: dict[str, int] = {"1W": 8, "1M": 12, "3M": 6}
+DEFAULT_COVERAGE_FLOOR: float = 0.4
 
 
 class DashboardRepositoryProtocol(Protocol):
@@ -127,6 +130,80 @@ def _default_learning_metrics(horizon: str) -> dict[str, object]:
     }
 
 
+def _int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return max(1, int(raw.strip()))
+    except ValueError:
+        return default
+
+
+def _float_env(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw.strip())
+    except ValueError:
+        return default
+
+
+def _reliability_thresholds() -> dict[str, object]:
+    min_realized_by_horizon = {
+        horizon: _int_env(
+            f"LEARNING_RELIABILITY_MIN_REALIZED_{horizon}",
+            DEFAULT_MIN_REALIZED_BY_HORIZON[horizon],
+        )
+        for horizon in REQUIRED_LEARNING_HORIZONS
+    }
+    return {
+        "min_realized_by_horizon": min_realized_by_horizon,
+        "coverage_floor": _float_env("LEARNING_RELIABILITY_COVERAGE_FLOOR", DEFAULT_COVERAGE_FLOOR),
+    }
+
+
+def _classify_learning_reliability(
+    row: dict[str, object],
+    min_realized_required: int,
+    coverage_floor: float,
+) -> dict[str, object]:
+    realized_count_raw = row.get("realized_count", 0)
+    try:
+        realized_count = int(realized_count_raw)
+    except (TypeError, ValueError):
+        realized_count = 0
+
+    coverage_raw = row.get("realization_coverage")
+    try:
+        coverage = None if coverage_raw is None else float(coverage_raw)
+    except (TypeError, ValueError):
+        coverage = None
+
+    low_sample_threshold = max(min_realized_required + 1, min_realized_required * 2)
+    if realized_count < min_realized_required:
+        state = "insufficient"
+        reason = f"realized_count_below_min:{realized_count}<{min_realized_required}"
+    elif realized_count < low_sample_threshold:
+        state = "low_sample"
+        reason = f"realized_count_low_sample:{realized_count}<{low_sample_threshold}"
+    elif coverage is not None and coverage < coverage_floor:
+        state = "low_sample"
+        reason = f"coverage_below_floor:{coverage:.3f}<{coverage_floor:.3f}"
+    else:
+        state = "reliable"
+        reason = "sample_and_coverage_ok"
+
+    return {
+        "reliability_state": state,
+        "reliability_reason": reason,
+        "min_realized_required": min_realized_required,
+        "observed_realized_count": realized_count,
+        "coverage_floor": coverage_floor,
+    }
+
+
 def build_dashboard_view(
     repository: DashboardRepositoryProtocol,
     limit: int = 20,
@@ -137,6 +214,9 @@ def build_dashboard_view(
         repository.read_status_counters,
     )
     tracked_horizons = REQUIRED_LEARNING_HORIZONS
+    thresholds = _reliability_thresholds()
+    min_realized_by_horizon = thresholds["min_realized_by_horizon"]
+    coverage_floor = float(thresholds["coverage_floor"])
     learning_metrics_by_horizon = {
         horizon: _safe_repo_call(
             _default_learning_metrics(horizon),
@@ -145,6 +225,17 @@ def build_dashboard_view(
         )
         for horizon in tracked_horizons
     }
+    learning_reliability_by_horizon = {
+        horizon: _classify_learning_reliability(
+            row if isinstance(row, dict) else {},
+            int(min_realized_by_horizon[horizon]),
+            coverage_floor,
+        )
+        for horizon, row in learning_metrics_by_horizon.items()
+    }
+    for horizon, row in learning_metrics_by_horizon.items():
+        if isinstance(row, dict):
+            row.update(learning_reliability_by_horizon[horizon])
     learning_metrics = learning_metrics_by_horizon["1M"]
 
     attribution_summary = {
@@ -276,6 +367,11 @@ def build_dashboard_view(
         "counters": counters,
         "learning_metrics": learning_metrics,
         "learning_metrics_by_horizon": learning_metrics_by_horizon,
+        "learning_reliability_by_horizon": learning_reliability_by_horizon,
+        "learning_reliability_thresholds": {
+            "min_realized_by_horizon": min_realized_by_horizon,
+            "coverage_floor": coverage_floor,
+        },
         "attribution_summary": attribution_summary,
         "attribution_gap_rows": attribution_gap_rows,
         "recent_runs": recent_runs,

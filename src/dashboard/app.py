@@ -148,13 +148,17 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
             row_coverage = to_pct_metric(row.get("realization_coverage"), precision=1)
             row_hit_rate = to_pct_metric(row.get("hit_rate"), precision=1)
             row_mae = to_pct_metric(row.get("mean_abs_forecast_error"), precision=2)
+            reliability_state = str(row.get("reliability_state", "insufficient"))
+            reliability_reason = str(row.get("reliability_reason", "missing_reliability_metadata"))
             row_metrics = (row_forecast, row_realized, row_coverage, row_hit_rate, row_mae)
-            if all(metric["status"] == "ok" for metric in row_metrics):
-                row_status = "ok"
-            elif any(metric["status"] == "error" for metric in row_metrics):
+            if any(metric["status"] == "error" for metric in row_metrics):
                 row_status = "error"
-            else:
+            elif any(metric["status"] == "unknown" for metric in row_metrics):
                 row_status = "unknown"
+            elif reliability_state == "reliable":
+                row_status = "ok"
+            else:
+                row_status = "warn"
             horizon_rows.append(
                 {
                     "horizon": horizon,
@@ -163,11 +167,19 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
                     "coverage_pct": row_coverage["value"],
                     "hit_rate_pct": row_hit_rate["value"],
                     "mae_pct": row_mae["value"],
+                    "reliability": reliability_state,
+                    "reliability_reason": reliability_reason,
+                    "min_realized_required": row.get("min_realized_required"),
                     "status": row_status,
                 }
             )
 
     has_horizon_alert = any(row.get("status") != "ok" for row in horizon_rows)
+    primary_horizon_row = next((row for row in horizon_rows if row.get("horizon") == "1M"), None)
+    primary_horizon_reliability_alert = bool(
+        primary_horizon_row
+        and primary_horizon_row.get("reliability") in {"insufficient", "low_sample"}
+    )
 
     return {
         "last_run_status": str(view.get("last_run_status", "no-data")),
@@ -175,6 +187,7 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         **{k: v["value"] for k, v in metrics.items()},
         "metric_status": {k: {"status": v["status"], "reason": v["reason"]} for k, v in metrics.items()},
         "has_critical_metric_alert": critical_unknown_or_error or has_horizon_alert,
+        "has_primary_horizon_reliability_alert": primary_horizon_reliability_alert,
         "learning_metrics_panel": horizon_rows,
     }
 
@@ -205,6 +218,10 @@ def run_streamlit_app(dsn: str) -> None:
     if cards["has_critical_metric_alert"]:
         st.warning(
             "Some dashboard metrics are unavailable or malformed; verify data pipeline before acting."
+        )
+    if cards.get("has_primary_horizon_reliability_alert"):
+        st.warning(
+            "Primary horizon (1M) learning metrics are not yet statistically reliable; treat KPI changes as directional only."
         )
 
     c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16 = st.columns(16)

@@ -20,9 +20,9 @@ def test_dashboard_app_builds_cards_from_view_model():
             },
             "learning_metrics": {
                 "horizon": "1M",
-                "forecast_count": 25,
-                "realized_count": 10,
-                "realization_coverage": 0.4,
+                "forecast_count": 40,
+                "realized_count": 25,
+                "realization_coverage": 0.63,
                 "hit_rate": 0.6,
                 "mean_abs_forecast_error": 0.025,
                 "mean_signed_forecast_error": -0.007,
@@ -30,27 +30,36 @@ def test_dashboard_app_builds_cards_from_view_model():
             "learning_metrics_by_horizon": {
                 "1W": {
                     "horizon": "1W",
-                    "forecast_count": 5,
-                    "realized_count": 4,
+                    "forecast_count": 20,
+                    "realized_count": 16,
                     "realization_coverage": 0.8,
                     "hit_rate": 0.5,
                     "mean_abs_forecast_error": 0.01,
+                    "reliability_state": "reliable",
+                    "reliability_reason": "sample_and_coverage_ok",
+                    "min_realized_required": 8,
                 },
                 "1M": {
                     "horizon": "1M",
-                    "forecast_count": 25,
-                    "realized_count": 10,
-                    "realization_coverage": 0.4,
+                    "forecast_count": 40,
+                    "realized_count": 25,
+                    "realization_coverage": 0.63,
                     "hit_rate": 0.6,
                     "mean_abs_forecast_error": 0.025,
+                    "reliability_state": "reliable",
+                    "reliability_reason": "sample_and_coverage_ok",
+                    "min_realized_required": 12,
                 },
                 "3M": {
                     "horizon": "3M",
-                    "forecast_count": 12,
-                    "realized_count": 8,
-                    "realization_coverage": 0.67,
+                    "forecast_count": 16,
+                    "realized_count": 12,
+                    "realization_coverage": 0.75,
                     "hit_rate": 0.58,
                     "mean_abs_forecast_error": 0.03,
+                    "reliability_state": "reliable",
+                    "reliability_reason": "sample_and_coverage_ok",
+                    "min_realized_required": 6,
                 },
             },
             "attribution_summary": {
@@ -70,9 +79,9 @@ def test_dashboard_app_builds_cards_from_view_model():
     assert cards["last_run_status"] == "success"
     assert cards["raw_events"] == 100
     assert cards["quarantine_events"] == 10
-    assert cards["forecast_count"] == 25
-    assert cards["realized_count"] == 10
-    assert cards["coverage_pct"] == "40.0%"
+    assert cards["forecast_count"] == 40
+    assert cards["realized_count"] == 25
+    assert cards["coverage_pct"] == "63.0%"
     assert cards["hit_rate_pct"] == "60.0%"
     assert cards["mae_pct"] == "2.50%"
     assert cards["signed_error_pct"] == "-0.70%"
@@ -201,3 +210,49 @@ def test_dashboard_app_keeps_true_zero_values_as_ok_not_unknown():
     assert cards["coverage_pct"] == "0.0%"
     assert cards["metric_status"]["raw_events"]["status"] == "ok"
     assert cards["metric_status"]["coverage_pct"]["status"] == "ok"
+
+
+def test_dashboard_app_flags_primary_horizon_reliability_guardrail():
+    cards = dashboard_app.build_operator_cards(
+        {
+            "learning_metrics_by_horizon": {
+                "1W": {
+                    "horizon": "1W",
+                    "forecast_count": 10,
+                    "realized_count": 4,
+                    "realization_coverage": 0.4,
+                    "hit_rate": 0.5,
+                    "mean_abs_forecast_error": 0.02,
+                    "reliability_state": "insufficient",
+                    "reliability_reason": "realized_count_below_min:4<8",
+                    "min_realized_required": 8,
+                },
+                "1M": {
+                    "horizon": "1M",
+                    "forecast_count": 12,
+                    "realized_count": 9,
+                    "realization_coverage": 0.75,
+                    "hit_rate": 0.55,
+                    "mean_abs_forecast_error": 0.03,
+                    "reliability_state": "insufficient",
+                    "reliability_reason": "realized_count_below_min:9<12",
+                    "min_realized_required": 12,
+                },
+                "3M": {
+                    "horizon": "3M",
+                    "forecast_count": 6,
+                    "realized_count": 5,
+                    "realization_coverage": 0.83,
+                    "hit_rate": 0.5,
+                    "mean_abs_forecast_error": 0.04,
+                    "reliability_state": "insufficient",
+                    "reliability_reason": "realized_count_below_min:5<6",
+                    "min_realized_required": 6,
+                },
+            }
+        }
+    )
+
+    assert cards["has_primary_horizon_reliability_alert"] is True
+    assert cards["learning_metrics_panel"][1]["reliability"] == "insufficient"
+    assert cards["learning_metrics_panel"][1]["status"] == "warn"
