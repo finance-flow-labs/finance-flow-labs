@@ -19,6 +19,12 @@ CRITICAL_METRIC_KEYS = {
     "evidence_gap_count",
 }
 
+RELIABILITY_BADGES = {
+    "reliable": "🟢 reliable",
+    "low_sample": "🟠 low_sample",
+    "insufficient": "🔴 insufficient",
+}
+
 
 def _is_placeholder(value: object) -> bool:
     return isinstance(value, str) and value.strip().lower() in PLACEHOLDER_STRINGS
@@ -26,6 +32,23 @@ def _is_placeholder(value: object) -> bool:
 
 def _metric(value: object, status: str = "ok", reason: str | None = None) -> dict[str, object]:
     return {"value": value, "status": status, "reason": reason}
+
+
+def _humanize_reliability_reason(reason: str) -> str:
+    if reason.startswith("realized_count_below_min:"):
+        detail = reason.split(":", 1)[1] if ":" in reason else ""
+        return f"Realized sample below minimum ({detail})."
+    if reason.startswith("realized_count_low_sample:"):
+        detail = reason.split(":", 1)[1] if ":" in reason else ""
+        return f"Realized sample is still low ({detail})."
+    if reason.startswith("coverage_below_floor:"):
+        detail = reason.split(":", 1)[1] if ":" in reason else ""
+        return f"Realization coverage below floor ({detail})."
+    if reason == "sample_and_coverage_ok":
+        return "Sample size and coverage meet reliability threshold."
+    if reason == "missing_reliability_metadata":
+        return "Reliability metadata missing from backend response."
+    return reason
 
 
 def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
@@ -173,7 +196,11 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
                 "hit_rate_pct": row_hit_rate["value"],
                 "mae_pct": row_mae["value"],
                 "reliability": reliability_state,
+                "reliability_badge": RELIABILITY_BADGES.get(
+                    reliability_state, f"⚪ {reliability_state}"
+                ),
                 "reliability_reason": reliability_reason,
+                "reliability_reason_text": _humanize_reliability_reason(reliability_reason),
                 "min_realized_required": row.get("min_realized_required"),
                 "status": row_status,
             }

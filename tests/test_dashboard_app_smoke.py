@@ -96,6 +96,11 @@ def test_dashboard_app_builds_cards_from_view_model():
     assert cards["has_critical_metric_alert"] is False
     assert len(cards["learning_metrics_panel"]) == 3
     assert cards["learning_metrics_panel"][0]["horizon"] == "1W"
+    assert cards["learning_metrics_panel"][0]["reliability_badge"] == "🟢 reliable"
+    assert (
+        cards["learning_metrics_panel"][0]["reliability_reason_text"]
+        == "Sample size and coverage meet reliability threshold."
+    )
 
 
 def test_dashboard_app_treats_malformed_count_metrics_as_unknown_or_error():
@@ -263,4 +268,6 @@ def test_dashboard_app_flags_primary_horizon_reliability_guardrail():
 
     assert cards["has_primary_horizon_reliability_alert"] is True
     assert cards["learning_metrics_panel"][1]["reliability"] == "insufficient"
+    assert cards["learning_metrics_panel"][1]["reliability_badge"] == "🔴 insufficient"
+    assert "Realized sample below minimum" in cards["learning_metrics_panel"][1]["reliability_reason_text"]
     assert cards["learning_metrics_panel"][1]["status"] == "warn"
