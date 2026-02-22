@@ -31,6 +31,7 @@ def test_dashboard_app_builds_cards_from_view_model():
                 "top_category": "macro_miss",
                 "top_count": 3,
                 "hard_evidence_coverage": 0.86,
+                "hard_evidence_traceability_coverage": 0.71,
                 "soft_evidence_coverage": 0.57,
                 "evidence_gap_count": 1,
                 "evidence_gap_coverage": 0.14,
@@ -51,6 +52,7 @@ def test_dashboard_app_builds_cards_from_view_model():
     assert cards["attribution_top_category"] == "macro_miss"
     assert cards["attribution_top_count"] == 3
     assert cards["hard_evidence_pct"] == "86.0%"
+    assert cards["hard_evidence_traceability_pct"] == "71.0%"
     assert cards["soft_evidence_pct"] == "57.0%"
     assert cards["evidence_gap_count"] == 1
     assert cards["evidence_gap_pct"] == "14.0%"
