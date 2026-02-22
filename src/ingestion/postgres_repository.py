@@ -50,6 +50,18 @@ class PostgresRepository:
                 f"{context} requires non-empty evidence_hard (HARD evidence)"
             )
 
+        for index, item in enumerate(evidence_hard):
+            if not isinstance(item, Mapping):
+                raise ValueError(
+                    f"{context} evidence_hard[{index}] must be an object with traceable metadata"
+                )
+
+            source = item.get("source")
+            if not isinstance(source, str) or source.strip() == "":
+                raise ValueError(
+                    f"{context} evidence_hard[{index}] requires non-empty source"
+                )
+
     def _connect(self) -> ConnectionProtocol:
         if self._connection_factory is not None:
             return self._connection_factory()
