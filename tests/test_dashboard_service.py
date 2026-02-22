@@ -116,3 +116,34 @@ def test_dashboard_service_falls_back_when_core_dashboard_queries_fail():
     }
     assert view["learning_metrics"]["forecast_count"] == 0
     assert view["learning_metrics"]["realized_count"] == 0
+
+
+class StringEvidenceRepo(FakeDashboardRepo):
+    def read_forecast_error_category_stats(self, horizon="1M", limit=5):
+        return []
+
+    def read_forecast_error_attributions(self, horizon="1M", limit=200):
+        return [
+            {
+                "category": "macro_miss",
+                "evidence_hard": '[{"source":"FRED","metric":"CPI"}]',
+                "evidence_soft": '[{"note":"narrative"}]',
+            },
+            {
+                "category": "unknown",
+                "evidence_hard": '{bad-json',
+                "evidence_soft": 'not-json',
+            },
+        ]
+
+
+def test_dashboard_service_ignores_invalid_string_evidence_payloads():
+    view = build_dashboard_view(StringEvidenceRepo())
+
+    summary = view["attribution_summary"]
+    assert summary["total"] == 2
+    assert summary["hard_evidence_coverage"] == 0.5
+    assert summary["hard_evidence_traceability_coverage"] == 0.5
+    assert summary["soft_evidence_coverage"] == 0.5
+    assert summary["evidence_gap_count"] == 1
+    assert summary["evidence_gap_coverage"] == 0.5

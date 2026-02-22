@@ -19,8 +19,7 @@ def _count_non_empty_evidence(value: object) -> bool:
     if isinstance(value, list):
         return len(value) > 0
     if isinstance(value, str):
-        trimmed = value.strip()
-        return trimmed not in {"", "[]", "null", "None"}
+        return len(_parse_evidence_items(value)) > 0
     return value is not None
 
 
