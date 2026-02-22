@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 from typing import Iterable, Mapping, Optional
 
@@ -12,12 +13,19 @@ def _parse_datetime(value: object) -> Optional[datetime]:
     if not isinstance(value, str) or not value:
         return None
 
-    for fmt in ("%Y-%m-%d", "%Y%m", "%Y-%m", "%Y%m%d"):
+    for fmt in ("%Y-%m-%d", "%Y%m", "%Y-%m", "%Y%m%d", "%Y"):
         try:
             dt = datetime.strptime(value, fmt)
             return dt.replace(tzinfo=timezone.utc)
         except ValueError:
             pass
+
+    quarter_match = re.fullmatch(r"(\d{4})-?Q([1-4])", value.strip(), flags=re.IGNORECASE)
+    if quarter_match:
+        year = int(quarter_match.group(1))
+        quarter = int(quarter_match.group(2))
+        month = (quarter - 1) * 3 + 1
+        return datetime(year, month, 1, tzinfo=timezone.utc)
 
     try:
         dt = datetime.fromisoformat(value)
