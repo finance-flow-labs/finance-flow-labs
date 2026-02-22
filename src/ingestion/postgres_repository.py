@@ -321,6 +321,10 @@ class PostgresRepository:
         return str(row[0])
 
     def write_forecast_record(self, record: Mapping[str, object]) -> int:
+        forecast_id, _ = self.write_forecast_record_idempotent(record)
+        return forecast_id
+
+    def write_forecast_record_idempotent(self, record: Mapping[str, object]) -> tuple[int, bool]:
         self._require_hard_evidence(
             record.get("evidence_hard"),
             "forecast record",
@@ -342,7 +346,16 @@ class PostgresRepository:
                 evidence_soft,
                 as_of
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s)
-            RETURNING id
+            ON CONFLICT (thesis_id, horizon, as_of) DO UPDATE SET
+                expected_return_low = EXCLUDED.expected_return_low,
+                expected_return_high = EXCLUDED.expected_return_high,
+                expected_volatility = EXCLUDED.expected_volatility,
+                expected_drawdown = EXCLUDED.expected_drawdown,
+                confidence = EXCLUDED.confidence,
+                key_drivers = EXCLUDED.key_drivers,
+                evidence_hard = EXCLUDED.evidence_hard,
+                evidence_soft = EXCLUDED.evidence_soft
+            RETURNING id, (xmax = 0) AS inserted
             """,
             (
                 record["thesis_id"],
@@ -358,11 +371,11 @@ class PostgresRepository:
                 record["as_of"],
             ),
         )
-        row = cursor.fetchone() or (0,)
+        row = cursor.fetchone() or (0, False)
         conn.commit()
         cursor.close()
         conn.close()
-        return int(row[0])
+        return int(row[0]), not bool(row[1])
 
     def write_realization_from_outcome(
         self,

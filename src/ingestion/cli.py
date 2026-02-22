@@ -38,6 +38,19 @@ def build_parser() -> argparse.ArgumentParser:
     _ = forecast_error_category_stats.add_argument("--horizon", default="1M")
     _ = forecast_error_category_stats.add_argument("--limit", type=int, default=20)
 
+    forecast_record_create = subparsers.add_parser("forecast-record-create")
+    _ = forecast_record_create.add_argument("--thesis-id", required=True)
+    _ = forecast_record_create.add_argument("--horizon", required=True, choices=["1W", "1M", "3M"])
+    _ = forecast_record_create.add_argument("--expected-return-low", required=True, type=float)
+    _ = forecast_record_create.add_argument("--expected-return-high", required=True, type=float)
+    _ = forecast_record_create.add_argument("--expected-volatility", type=float)
+    _ = forecast_record_create.add_argument("--expected-drawdown", type=float)
+    _ = forecast_record_create.add_argument("--confidence", required=True, type=float)
+    _ = forecast_record_create.add_argument("--key-drivers-json", default="[]")
+    _ = forecast_record_create.add_argument("--evidence-hard-json", required=True)
+    _ = forecast_record_create.add_argument("--evidence-soft-json", default="[]")
+    _ = forecast_record_create.add_argument("--as-of", required=True)
+
     return parser
 
 
@@ -79,6 +92,29 @@ def _collect_payload(source: str, entity: Optional[str]) -> tuple[str, dict[str,
         return stat_code, payload
 
     raise ValueError(f"unsupported source: {source}")
+
+
+def _parse_json_array(raw: str, field_name: str) -> list[object]:
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{field_name} must be valid JSON: {exc.msg}") from exc
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a JSON array")
+    return value
+
+
+def _parse_iso_datetime(raw: str, field_name: str) -> datetime:
+    normalized = raw.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be ISO-8601 datetime") from exc
+    if dt.tzinfo is None:
+        raise ValueError(f"{field_name} must include timezone offset (e.g. +00:00)")
+    return dt
 
 
 def run_update_command(source: str, entity: Optional[str] = None) -> dict[str, object]:
@@ -147,6 +183,52 @@ def read_forecast_error_category_stats_command(
     return repository.read_forecast_error_category_stats(horizon=horizon, limit=limit)
 
 
+def create_forecast_record_command(
+    thesis_id: str,
+    horizon: str,
+    expected_return_low: float,
+    expected_return_high: float,
+    confidence: float,
+    as_of: str,
+    key_drivers_json: str,
+    evidence_hard_json: str,
+    evidence_soft_json: str = "[]",
+    expected_volatility: Optional[float] = None,
+    expected_drawdown: Optional[float] = None,
+) -> dict[str, object]:
+    dsn = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
+    if not dsn:
+        raise ValueError("SUPABASE_DB_URL or DATABASE_URL is required")
+
+    if expected_return_low > expected_return_high:
+        raise ValueError("expected_return_low must be <= expected_return_high")
+    if not (0 <= confidence <= 1):
+        raise ValueError("confidence must be between 0 and 1")
+
+    payload = {
+        "thesis_id": thesis_id,
+        "horizon": horizon,
+        "expected_return_low": expected_return_low,
+        "expected_return_high": expected_return_high,
+        "expected_volatility": expected_volatility,
+        "expected_drawdown": expected_drawdown,
+        "confidence": confidence,
+        "key_drivers": _parse_json_array(key_drivers_json, "key_drivers_json"),
+        "evidence_hard": _parse_json_array(evidence_hard_json, "evidence_hard_json"),
+        "evidence_soft": _parse_json_array(evidence_soft_json, "evidence_soft_json"),
+        "as_of": _parse_iso_datetime(as_of, "as_of"),
+    }
+
+    repository = PostgresRepository(dsn=dsn)
+    forecast_id, deduplicated = repository.write_forecast_record_idempotent(payload)
+    return {
+        "forecast_id": forecast_id,
+        "deduplicated": deduplicated,
+        "thesis_id": thesis_id,
+        "horizon": horizon,
+    }
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -169,6 +251,23 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.command == "forecast-error-category-stats":
         rows = read_forecast_error_category_stats_command(horizon=args.horizon, limit=args.limit)
         print(json.dumps(rows, default=str))
+        return 0
+
+    if args.command == "forecast-record-create":
+        row = create_forecast_record_command(
+            thesis_id=args.thesis_id,
+            horizon=args.horizon,
+            expected_return_low=args.expected_return_low,
+            expected_return_high=args.expected_return_high,
+            expected_volatility=args.expected_volatility,
+            expected_drawdown=args.expected_drawdown,
+            confidence=args.confidence,
+            key_drivers_json=args.key_drivers_json,
+            evidence_hard_json=args.evidence_hard_json,
+            evidence_soft_json=args.evidence_soft_json,
+            as_of=args.as_of,
+        )
+        print(json.dumps(row, default=str))
         return 0
 
     parser.print_help()

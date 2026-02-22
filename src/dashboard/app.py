@@ -224,6 +224,11 @@ def run_streamlit_app(dsn: str) -> None:
             "Primary horizon (1M) learning metrics are not yet statistically reliable; treat KPI changes as directional only."
         )
 
+    if cards.get("forecast_count") == 0:
+        st.info(
+            "No forecast records yet. Seed the learning loop with `python3 -m src.ingestion.cli forecast-record-create ...` (see docs/ingestion-runbook.md)."
+        )
+
     c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16 = st.columns(16)
     c1.metric("Last Status", cards["last_run_status"], cards["last_run_time"])
     c2.metric("Raw", cards["raw_events"], _metric_delta(cards, "raw_events"))
