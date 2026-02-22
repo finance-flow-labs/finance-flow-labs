@@ -1,4 +1,4 @@
-"""Command-line interface for the macro-analysis data tools.
+"""Command-line interface for the macro-analysis and stock-analysis data tools.
 
 Usage:
     python -m src.analysis.cli series <source> <id> [--limit N]
@@ -8,6 +8,8 @@ Usage:
     python -m src.analysis.cli youtube <url> [--language ko|en]
     python -m src.analysis.cli channel <handle> [--days N] [--max-videos N]
     python -m src.analysis.cli anomaly <source> <series_id> [--window N] [--threshold F]
+    python -m src.analysis.cli stock dart <name_or_ticker> [--year YYYY]
+    python -m src.analysis.cli stock edgar <name_or_ticker>
 
 All subcommands output JSON to stdout.
 """
@@ -23,6 +25,7 @@ from src.analysis.news_client import NewsClient
 from src.analysis.document_client import DocumentClient
 from src.analysis.transcript_client import TranscriptClient
 from src.analysis.channel_client import ChannelClient
+from src.analysis.stock_client import DartStockClient, EdgarStockClient
 
 
 def cmd_series(args: argparse.Namespace) -> None:
@@ -63,6 +66,32 @@ def cmd_channel(args: argparse.Namespace) -> None:
     print(json.dumps(results, ensure_ascii=False, indent=2))
 
 
+def cmd_stock(args: argparse.Namespace) -> None:
+    if args.market == "dart":
+        client = DartStockClient()
+        if args.year is not None:
+            # Fetch financials: args.query is corp_code or ticker
+            result = client.fetch_financials(args.query, args.year)
+        else:
+            result = {"companies": client.search_company(args.query)}  # type: ignore[assignment]
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:  # edgar
+        client_us = EdgarStockClient()
+        companies = client_us.search_company(args.query)
+        if companies:
+            cik = companies[0]["cik"]
+            facts = client_us.fetch_company_facts(cik)
+            filings = client_us.fetch_recent_filings(cik, limit=5)
+            result = {  # type: ignore[assignment]
+                "companies": companies,
+                "facts": facts,
+                "recent_filings": filings,
+            }
+        else:
+            result = {"companies": [], "facts": {}, "recent_filings": []}  # type: ignore[assignment]
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 def cmd_anomaly(args: argparse.Namespace) -> None:
     client = CanonicalDataClient()
     rows = client.read_series(args.source, args.series_id, limit=args.window * 3)
@@ -85,10 +114,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_series.set_defaults(func=cmd_series)
 
     # news
-    p_news = sub.add_parser("news", help="Fetch macro news RSS feed")
+    p_news = sub.add_parser("news", help="Fetch macro or stock news RSS feed")
     p_news.add_argument(
         "category",
-        choices=["global_macro", "us_economy", "korea_economy", "fed_policy", "markets"],
+        choices=[
+            "global_macro",
+            "us_economy",
+            "korea_economy",
+            "fed_policy",
+            "markets",
+            "kr_stock_news",
+            "us_stock_news",
+            "kr_corp_news",
+        ],
     )
     p_news.add_argument("--limit", type=int, default=5)
     p_news.set_defaults(func=cmd_news)
@@ -129,6 +167,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_anom.add_argument("--window", type=int, default=6)
     p_anom.add_argument("--threshold", type=float, default=2.0)
     p_anom.set_defaults(func=cmd_anomaly)
+
+    # stock
+    p_stock = sub.add_parser("stock", help="Fetch stock data from DART (KR) or SEC EDGAR (US)")
+    p_stock_sub = p_stock.add_subparsers(dest="market", required=True)
+
+    p_dart = p_stock_sub.add_parser("dart", help="Fetch Korean stock data via OpenDART")
+    p_dart.add_argument("query", help="Company name or stock ticker (e.g. 삼성전자, 005930)")
+    p_dart.add_argument("--year", type=int, default=None, help="Fiscal year for financial statements")
+    p_dart.set_defaults(func=cmd_stock)
+
+    p_edgar = p_stock_sub.add_parser("edgar", help="Fetch US stock data via SEC EDGAR")
+    p_edgar.add_argument("query", help="Company name or ticker (e.g. Apple, AAPL)")
+    p_edgar.add_argument("--year", type=int, default=None, help="(unused for EDGAR, reserved)")
+    p_edgar.set_defaults(func=cmd_stock)
 
     return parser
 

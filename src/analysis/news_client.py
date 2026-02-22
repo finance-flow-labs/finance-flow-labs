@@ -10,6 +10,10 @@ NEWS_FEEDS: dict[str, str] = {
     "korea_economy": "https://www.hankyung.com/feed/economy",
     "fed_policy": "https://www.federalreserve.gov/feeds/press_all.xml",
     "markets": "https://feeds.bbci.co.uk/news/business/economy/rss.xml",
+    # Stock-specific feeds
+    "kr_stock_news": "https://www.hankyung.com/feed/stock",
+    "us_stock_news": "https://feeds.marketwatch.com/marketwatch/topstories/",
+    "kr_corp_news": "https://www.yna.co.kr/RSS/economy.xml",
 }
 
 OFFICIAL_FEEDS: dict[str, str] = {
@@ -64,3 +68,8 @@ class NewsClient:
             "news": sorted(NEWS_FEEDS),
             "official": sorted(OFFICIAL_FEEDS),
         }
+
+    @staticmethod
+    def stock_categories() -> list[str]:
+        """Return stock-specific feed category names."""
+        return ["kr_stock_news", "us_stock_news", "kr_corp_news"]

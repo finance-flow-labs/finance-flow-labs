@@ -152,6 +152,87 @@ class PostgresRepository:
         cursor.close()
         conn.close()
 
+    def write_stock_analysis_result(self, result: Mapping[str, object]) -> None:
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO stock_analysis_results(
+                run_id,
+                ticker,
+                company_name,
+                market,
+                as_of,
+                bull_case,
+                bear_case,
+                fundamental_case,
+                value_case,
+                growth_case,
+                risk_case,
+                critic_case,
+                narrative,
+                model
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                result["run_id"],
+                result["ticker"],
+                result.get("company_name"),
+                result.get("market"),
+                result["as_of"],
+                result.get("bull_case", ""),
+                result.get("bear_case", ""),
+                result.get("fundamental_case", ""),
+                result.get("value_case", ""),
+                result.get("growth_case", ""),
+                result.get("risk_case", ""),
+                result.get("critic_case", ""),
+                result.get("narrative", ""),
+                result.get("model"),
+            ),
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+    def read_latest_stock_analysis(
+        self, ticker: str = "", limit: int = 20
+    ) -> list[dict[str, object]]:
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        if ticker:
+            cursor.execute(
+                """
+                SELECT
+                    run_id, ticker, company_name, market, as_of,
+                    bull_case, bear_case, fundamental_case, value_case,
+                    growth_case, risk_case, critic_case, narrative, model, created_at
+                FROM stock_analysis_results
+                WHERE ticker = %s
+                ORDER BY as_of DESC, created_at DESC
+                LIMIT %s
+                """,
+                (ticker, limit),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT
+                    run_id, ticker, company_name, market, as_of,
+                    bull_case, bear_case, fundamental_case, value_case,
+                    growth_case, risk_case, critic_case, narrative, model, created_at
+                FROM stock_analysis_results
+                ORDER BY as_of DESC, created_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+        rows = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        cursor.close()
+        conn.close()
+        return [dict(zip(columns, row)) for row in rows]
+
     def read_latest_macro_analysis(self, limit: int = 20) -> list[dict[str, object]]:
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()
