@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from src.enduser.macro_signal_reader import read_latest_macro_regime_signal
 from src.enduser.signals import render_macro_regime_card
 
 
@@ -16,5 +17,6 @@ def run_enduser_app(dsn: str) -> None:
         st.info("Coming soon")
 
     with signals_tab:
-        render_macro_regime_card(regime_signal=None)
+        regime_signal = read_latest_macro_regime_signal(dsn)
+        render_macro_regime_card(regime_signal=regime_signal)
         st.info("More signal cards coming soon")

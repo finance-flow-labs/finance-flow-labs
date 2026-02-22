@@ -29,6 +29,19 @@ def render_macro_regime_card(regime_signal: dict[str, Any] | None) -> None:
         st.info("No macro regime signal yet. Analysis pipeline data is pending.")
         return
 
+    status = str(regime_signal.get("status", "ok")).strip().lower()
+    if status in {"missing", "error"}:
+        message = str(regime_signal.get("message") or "Macro regime signal unavailable.")
+        st.warning(f"[{status}] {message}")
+        return
+
+    if status == "stale":
+        message = str(
+            regime_signal.get("message")
+            or "Signal is stale. Review ingestion pipeline before using this for decisions."
+        )
+        st.warning(f"[stale] {message}")
+
     regime_key = str(regime_signal.get("regime", "neutral")).strip().lower().replace("-", "_")
     emoji, regime_label = _REGIME_META.get(regime_key, _REGIME_META["neutral"])
 
@@ -42,6 +55,8 @@ def render_macro_regime_card(regime_signal: dict[str, Any] | None) -> None:
 
     st.markdown(f"### {emoji} {regime_label}")
     st.caption(f"as_of: {_normalize_as_of(regime_signal.get('as_of'))}")
+    if regime_signal.get("lineage_id"):
+        st.caption(f"lineage_id: {regime_signal.get('lineage_id')}")
 
     st.write(f"신뢰도: {confidence * 100:.0f}%")
     st.progress(confidence)

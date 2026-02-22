@@ -58,6 +58,19 @@ Environment variables:
   - `read_latest_macro_analysis(limit)`
 - 저장 필드에는 `regime`, `confidence`, `base/bull/bear`, `policy_case`, `critic_case`, `reason_codes`, `risk_flags`, `triggers`, `narrative`, `model` 포함
 
+### End-user Signals wiring validation
+
+- End-user Signals 탭은 `src/enduser/macro_signal_reader.py`를 통해 `read_latest_macro_analysis(limit=1)`를 읽어 매크로 레짐 카드를 렌더링한다.
+- 상태 규칙:
+  - `ok`: 최신 신호 렌더링
+  - `stale`: 신호는 보이되 stale 경고 표시(기본 7일 초과)
+  - `missing`: DB 레코드 없음 경고
+  - `error`: malformed row/조회 실패 경고
+- 빠른 검증 절차:
+  1. `SUPABASE_DB_URL=... python3 -m src.ingestion.cli macro-analysis --as-of <ISO8601>`로 레코드 1건 저장
+  2. `streamlit run enduser_app.py` 실행
+  3. Signals 탭에서 regime/confidence/as_of/lineage 표시 및 stale/missing/error 상태 메시지 확인
+
 ## Forecast Capture (operator-safe)
 
 Use CLI (no direct SQL) to create/update a forecast record with schema validation and idempotency (`thesis_id + horizon + as_of`).
