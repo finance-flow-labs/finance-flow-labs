@@ -337,6 +337,57 @@ class PostgresRepository:
         conn.close()
         return int(row[0])
 
+    def read_forecast_error_attributions(
+        self,
+        horizon: str = "1M",
+        limit: int = 100,
+    ) -> list[dict[str, object]]:
+        """Read forecast-error attribution rows for learning-loop diagnostics.
+
+        Keeps HARD/SOFT evidence separated for traceable post-mortem analysis.
+        """
+        conn: ConnectionProtocol = self._connect()
+        cursor: CursorProtocol = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                fea.id AS attribution_id,
+                fea.realization_id,
+                fea.category,
+                fea.contribution,
+                fea.note,
+                fea.evidence_hard,
+                fea.evidence_soft,
+                fea.created_at,
+                rr.forecast_id,
+                rr.realized_return,
+                rr.forecast_error,
+                rr.hit,
+                rr.evaluated_at,
+                fr.horizon,
+                fr.thesis_id,
+                fr.as_of,
+                fr.expected_return_low,
+                fr.expected_return_high,
+                it.scope_level,
+                it.target_id,
+                it.title
+            FROM forecast_error_attributions fea
+            JOIN realization_records rr ON rr.id = fea.realization_id
+            JOIN forecast_records fr ON fr.id = rr.forecast_id
+            JOIN investment_theses it ON it.thesis_id = fr.thesis_id
+            WHERE fr.horizon = %s
+            ORDER BY rr.evaluated_at DESC, fea.id DESC
+            LIMIT %s
+            """,
+            (horizon, limit),
+        )
+        rows = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        cursor.close()
+        conn.close()
+        return [dict(zip(columns, row)) for row in rows]
+
     def read_expected_vs_realized(
         self,
         horizon: str = "1M",
