@@ -1,3 +1,4 @@
+import json
 from collections import Counter
 from typing import Protocol
 
@@ -23,13 +24,63 @@ def _count_non_empty_evidence(value: object) -> bool:
     return value is not None
 
 
+def _parse_evidence_items(value: object) -> list[object]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        trimmed = value.strip()
+        if trimmed in {"", "[]", "null", "None"}:
+            return []
+        try:
+            parsed = json.loads(trimmed)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            return []
+    return []
+
+
+def _has_traceable_hard_evidence(value: object) -> bool:
+    for item in _parse_evidence_items(value):
+        if not isinstance(item, dict):
+            continue
+        source = str(item.get("source", "")).strip()
+        if source:
+            return True
+    return False
+
+
+def _safe_repo_call(default: object, fn: object, *args: object, **kwargs: object) -> object:
+    try:
+        if not callable(fn):
+            return default
+        return fn(*args, **kwargs)
+    except Exception:
+        return default
+
+
 def build_dashboard_view(
     repository: DashboardRepositoryProtocol,
     limit: int = 20,
 ) -> dict[str, object]:
-    recent_runs = repository.read_latest_runs(limit=limit)
-    counters = repository.read_status_counters()
-    learning_metrics = repository.read_learning_metrics(horizon="1M")
+    recent_runs = _safe_repo_call([], repository.read_latest_runs, limit=limit)
+    counters = _safe_repo_call(
+        {"raw_events": 0, "canonical_events": 0, "quarantine_events": 0},
+        repository.read_status_counters,
+    )
+    learning_metrics = _safe_repo_call(
+        {
+            "horizon": "1M",
+            "forecast_count": 0,
+            "realized_count": 0,
+            "realization_coverage": None,
+            "hit_rate": None,
+            "mean_abs_forecast_error": None,
+            "mean_signed_forecast_error": None,
+        },
+        repository.read_learning_metrics,
+        horizon="1M",
+    )
 
     attribution_summary = {
         "total": 0,
@@ -37,13 +88,19 @@ def build_dashboard_view(
         "top_count": 0,
         "top_categories": [],
         "hard_evidence_coverage": None,
+        "hard_evidence_traceability_coverage": None,
         "soft_evidence_coverage": None,
         "evidence_gap_count": 0,
         "evidence_gap_coverage": None,
     }
     if hasattr(repository, "read_forecast_error_category_stats"):
-        category_stats = repository.read_forecast_error_category_stats(horizon="1M", limit=5)
-        if category_stats:
+        category_stats = _safe_repo_call(
+            [],
+            repository.read_forecast_error_category_stats,
+            horizon="1M",
+            limit=5,
+        )
+        if isinstance(category_stats, list) and category_stats:
             top = category_stats[0]
             attribution_summary = {
                 "total": int(sum(int(row.get("attribution_count", 0)) for row in category_stats)),
@@ -51,14 +108,20 @@ def build_dashboard_view(
                 "top_count": int(top.get("attribution_count", 0)),
                 "top_categories": category_stats,
                 "hard_evidence_coverage": None,
+                "hard_evidence_traceability_coverage": None,
                 "soft_evidence_coverage": None,
                 "evidence_gap_count": 0,
                 "evidence_gap_coverage": None,
             }
 
     if hasattr(repository, "read_forecast_error_attributions"):
-        attribution_rows = repository.read_forecast_error_attributions(horizon="1M", limit=200)
-        if attribution_rows:
+        attribution_rows = _safe_repo_call(
+            [],
+            repository.read_forecast_error_attributions,
+            horizon="1M",
+            limit=200,
+        )
+        if isinstance(attribution_rows, list) and attribution_rows:
             categories = [
                 str(row.get("category", "unknown"))
                 for row in attribution_rows
@@ -80,6 +143,7 @@ def build_dashboard_view(
                 )
 
             hard_count = 0
+            traceable_hard_count = 0
             soft_count = 0
             evidence_gap_count = 0
             valid_rows = 0
@@ -88,9 +152,12 @@ def build_dashboard_view(
                     continue
                 valid_rows += 1
                 has_hard = _count_non_empty_evidence(row.get("evidence_hard"))
+                has_traceable_hard = _has_traceable_hard_evidence(row.get("evidence_hard"))
                 has_soft = _count_non_empty_evidence(row.get("evidence_soft"))
                 if has_hard:
                     hard_count += 1
+                if has_traceable_hard:
+                    traceable_hard_count += 1
                 if has_soft:
                     soft_count += 1
                 if not has_hard and not has_soft:
@@ -99,14 +166,21 @@ def build_dashboard_view(
             if valid_rows > 0:
                 attribution_summary["total"] = valid_rows
                 attribution_summary["hard_evidence_coverage"] = hard_count / valid_rows
+                attribution_summary["hard_evidence_traceability_coverage"] = (
+                    traceable_hard_count / valid_rows
+                )
                 attribution_summary["soft_evidence_coverage"] = soft_count / valid_rows
                 attribution_summary["evidence_gap_count"] = evidence_gap_count
                 attribution_summary["evidence_gap_coverage"] = evidence_gap_count / valid_rows
 
-    if recent_runs:
+    if isinstance(recent_runs, list) and recent_runs:
         latest = recent_runs[0]
-        last_run_status = str(latest.get("status", "unknown"))
-        last_run_time = str(latest.get("finished_at", ""))
+        if isinstance(latest, dict):
+            last_run_status = str(latest.get("status", "unknown"))
+            last_run_time = str(latest.get("finished_at", ""))
+        else:
+            last_run_status = "unknown"
+            last_run_time = ""
     else:
         last_run_status = "no-data"
         last_run_time = ""
