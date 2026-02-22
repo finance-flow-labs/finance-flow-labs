@@ -153,11 +153,12 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
                 return _metric("n/a", status="error", reason="non_finite_numeric")
             return _metric(int(value))
         if isinstance(value, str):
+            normalized = value.strip().replace(",", "")
             try:
-                return _metric(int(value))
+                return _metric(int(normalized))
             except ValueError:
                 try:
-                    parsed = float(value)
+                    parsed = float(normalized)
                 except ValueError:
                     return _metric("n/a", status="error", reason="invalid_numeric")
                 if not math.isfinite(parsed):

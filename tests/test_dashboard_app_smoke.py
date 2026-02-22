@@ -197,6 +197,35 @@ def test_dashboard_app_parses_numeric_strings_for_percent_metrics():
     assert cards["evidence_gap_pct"] == "14.0%"
 
 
+def test_dashboard_app_parses_comma_grouped_integer_strings_for_count_metrics():
+    cards = dashboard_app.build_operator_cards(
+        {
+            "counters": {
+                "raw_events": "1,234",
+                "canonical_events": "2,000",
+                "quarantine_events": "10",
+            },
+            "learning_metrics": {
+                "forecast_count": "12,345",
+                "realized_count": "6,789",
+            },
+            "attribution_summary": {
+                "total": "1,111",
+                "top_count": "222",
+                "evidence_gap_count": "3",
+            },
+        }
+    )
+
+    assert cards["raw_events"] == 1234
+    assert cards["canonical_events"] == 2000
+    assert cards["forecast_count"] == 12345
+    assert cards["realized_count"] == 6789
+    assert cards["attribution_total"] == 1111
+    assert cards["attribution_top_count"] == 222
+    assert cards["metric_status"]["raw_events"]["status"] == "ok"
+
+
 def test_dashboard_app_flags_missing_required_horizon_metrics():
     cards = dashboard_app.build_operator_cards(
         {
