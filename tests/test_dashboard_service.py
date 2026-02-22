@@ -78,6 +78,9 @@ def test_dashboard_service_builds_operator_view_model():
     assert view["attribution_summary"]["soft_evidence_coverage"] == 0.5
     assert view["attribution_summary"]["evidence_gap_count"] == 1
     assert view["attribution_summary"]["evidence_gap_coverage"] == 0.25
+    assert len(view["attribution_gap_rows"]) == 4
+    assert view["attribution_gap_rows"][0]["evidence_gap_reason"] == "hard_untraceable"
+    assert view["attribution_gap_rows"][-1]["evidence_gap_reason"] == "missing_hard_and_soft"
     assert len(view["recent_runs"]) == 2
 
 

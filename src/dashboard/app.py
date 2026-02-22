@@ -234,6 +234,24 @@ def run_streamlit_app(dsn: str) -> None:
         st.subheader("Multi-horizon Learning Metrics")
         st.dataframe(learning_panel, use_container_width=True)
 
+    attribution_gap_rows = view.get("attribution_gap_rows", [])
+    if isinstance(attribution_gap_rows, list):
+        st.subheader("Attribution Evidence Gaps (1M)")
+        only_problematic = st.checkbox(
+            "Show only problematic rows", value=True, key="show_only_problematic_attribution_rows"
+        )
+        rows_to_show = attribution_gap_rows
+        if only_problematic:
+            rows_to_show = [
+                row
+                for row in attribution_gap_rows
+                if isinstance(row, dict) and row.get("evidence_gap_reason") != "none"
+            ]
+        if rows_to_show:
+            st.dataframe(rows_to_show, use_container_width=True)
+        else:
+            st.info("No attribution evidence gaps detected in recent 1M rows.")
+
     recent_runs = view.get("recent_runs", [])
     if isinstance(recent_runs, list) and recent_runs:
         st.subheader("Recent Runs")

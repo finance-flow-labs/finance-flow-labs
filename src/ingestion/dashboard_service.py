@@ -70,6 +70,42 @@ def _has_traceable_hard_evidence(value: object) -> bool:
     return False
 
 
+def _preview_trace_fields(value: object) -> dict[str, str]:
+    for item in _parse_evidence_items(value):
+        if not isinstance(item, dict):
+            continue
+        source = str(item.get("source", "")).strip()
+        metric = str(item.get("metric", "") or item.get("metric_key", "")).strip()
+        as_of = str(item.get("as_of", "")).strip()
+        lineage_id = str(item.get("lineage_id", "")).strip()
+        return {
+            "trace_source": source or "",
+            "trace_metric": metric or "",
+            "trace_as_of": as_of or "",
+            "trace_lineage_id": lineage_id or "",
+        }
+    return {
+        "trace_source": "",
+        "trace_metric": "",
+        "trace_as_of": "",
+        "trace_lineage_id": "",
+    }
+
+
+def _classify_evidence_gap(evidence_hard: object, evidence_soft: object) -> str:
+    hard_items = _parse_evidence_items(evidence_hard)
+    soft_items = _parse_evidence_items(evidence_soft)
+    has_hard = len(hard_items) > 0
+    has_soft = len(soft_items) > 0
+    has_traceable_hard = _has_traceable_hard_evidence(evidence_hard)
+
+    if not has_hard and not has_soft:
+        return "missing_hard_and_soft"
+    if has_hard and not has_traceable_hard:
+        return "hard_untraceable"
+    return "none"
+
+
 def _safe_repo_call(default: object, fn: object, *args: object, **kwargs: object) -> object:
     try:
         if not callable(fn):
@@ -143,6 +179,7 @@ def build_dashboard_view(
                 "evidence_gap_coverage": None,
             }
 
+    attribution_gap_rows: list[dict[str, object]] = []
     if hasattr(repository, "read_forecast_error_attributions"):
         attribution_rows = _safe_repo_call(
             [],
@@ -183,13 +220,32 @@ def build_dashboard_view(
                 has_hard = _count_non_empty_evidence(row.get("evidence_hard"))
                 has_traceable_hard = _has_traceable_hard_evidence(row.get("evidence_hard"))
                 has_soft = _count_non_empty_evidence(row.get("evidence_soft"))
+                evidence_gap_reason = _classify_evidence_gap(
+                    row.get("evidence_hard"), row.get("evidence_soft")
+                )
+                trace_fields = _preview_trace_fields(row.get("evidence_hard"))
+                attribution_gap_rows.append(
+                    {
+                        "attribution_id": row.get("attribution_id"),
+                        "thesis_id": row.get("thesis_id"),
+                        "forecast_id": row.get("forecast_id"),
+                        "horizon": row.get("horizon", "1M"),
+                        "category": row.get("category", "unknown"),
+                        "created_at": row.get("created_at"),
+                        "has_hard_evidence": has_hard,
+                        "has_traceable_hard_evidence": has_traceable_hard,
+                        "has_soft_evidence": has_soft,
+                        "evidence_gap_reason": evidence_gap_reason,
+                        **trace_fields,
+                    }
+                )
                 if has_hard:
                     hard_count += 1
                 if has_traceable_hard:
                     traceable_hard_count += 1
                 if has_soft:
                     soft_count += 1
-                if not has_hard and not has_soft:
+                if evidence_gap_reason == "missing_hard_and_soft":
                     evidence_gap_count += 1
 
             if valid_rows > 0:
@@ -221,5 +277,6 @@ def build_dashboard_view(
         "learning_metrics": learning_metrics,
         "learning_metrics_by_horizon": learning_metrics_by_horizon,
         "attribution_summary": attribution_summary,
+        "attribution_gap_rows": attribution_gap_rows,
         "recent_runs": recent_runs,
     }
