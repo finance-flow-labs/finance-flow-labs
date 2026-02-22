@@ -205,6 +205,13 @@ def create_forecast_record_command(
     if not (0 <= confidence <= 1):
         raise ValueError("confidence must be between 0 and 1")
 
+    key_drivers = _parse_json_array(key_drivers_json, "key_drivers_json")
+    evidence_hard = _parse_json_array(evidence_hard_json, "evidence_hard_json")
+    evidence_soft = _parse_json_array(evidence_soft_json, "evidence_soft_json")
+
+    if not evidence_hard:
+        raise ValueError("evidence_hard_json must be a non-empty JSON array")
+
     payload = {
         "thesis_id": thesis_id,
         "horizon": horizon,
@@ -213,9 +220,9 @@ def create_forecast_record_command(
         "expected_volatility": expected_volatility,
         "expected_drawdown": expected_drawdown,
         "confidence": confidence,
-        "key_drivers": _parse_json_array(key_drivers_json, "key_drivers_json"),
-        "evidence_hard": _parse_json_array(evidence_hard_json, "evidence_hard_json"),
-        "evidence_soft": _parse_json_array(evidence_soft_json, "evidence_soft_json"),
+        "key_drivers": key_drivers,
+        "evidence_hard": evidence_hard,
+        "evidence_soft": evidence_soft,
         "as_of": _parse_iso_datetime(as_of, "as_of"),
     }
 
