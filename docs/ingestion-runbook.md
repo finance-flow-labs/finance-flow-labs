@@ -140,6 +140,12 @@ Operational response when check fails:
 2. Re-run check from a clean network session.
 3. If intentionally restricted, update this runbook + monitoring expectation and provide operator login instructions.
 
+Rollback steps (when a recent deployment introduced auth-wall regression):
+1. In Streamlit Community Cloud, open app settings and switch visibility back to the last known-good mode (`Public` for default production contract).
+2. Redeploy from the previous known-good commit on `main`.
+3. Re-run `streamlit-access-check` until exit code `0` is confirmed.
+4. Record incident timeline + root cause in the next daily summary.
+
 ### Reliability hardening for smoke checks
 
 - `streamlit-access-check` supports bounded retries to reduce transient-network false positives:
@@ -149,8 +155,15 @@ Operational response when check fails:
 - Recommended CI/deploy invocation:
 
 ```bash
-python3 -m src.ingestion.cli streamlit-access-check \
-  --url https://finance-flow-labs.streamlit.app/ \
-  --attempts 3 \
-  --backoff-seconds 0.5
+./scripts/streamlit_access_smoke_check.sh https://finance-flow-labs.streamlit.app/
 ```
+
+### Monitoring alert contract
+
+- Canonical smoke command is now packaged as script:
+  - `./scripts/streamlit_access_smoke_check.sh`
+  - optional URL override: `./scripts/streamlit_access_smoke_check.sh https://finance-flow-labs.streamlit.app/`
+- Alert trigger rule:
+  - if the script exits non-zero in deploy/ops automation, treat it as **critical access regression** and page operator.
+- Alert clear rule:
+  - close alert only after one clean rerun (`exit 0`) from a fresh session and visibility mode verification.
