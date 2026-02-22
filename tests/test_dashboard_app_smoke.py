@@ -88,3 +88,31 @@ def test_dashboard_app_handles_non_numeric_counter_strings_safely():
     assert cards["attribution_total"] == 0
     assert cards["attribution_top_count"] == 0
     assert cards["evidence_gap_count"] == 0
+
+
+def test_dashboard_app_parses_numeric_strings_for_percent_metrics():
+    cards = dashboard_app.build_operator_cards(
+        {
+            "learning_metrics": {
+                "realization_coverage": "0.4",
+                "hit_rate": "0.6",
+                "mean_abs_forecast_error": "0.025",
+                "mean_signed_forecast_error": "-0.007",
+            },
+            "attribution_summary": {
+                "hard_evidence_coverage": "0.86",
+                "hard_evidence_traceability_coverage": "0.71",
+                "soft_evidence_coverage": "0.57",
+                "evidence_gap_coverage": "0.14",
+            },
+        }
+    )
+
+    assert cards["coverage_pct"] == "40.0%"
+    assert cards["hit_rate_pct"] == "60.0%"
+    assert cards["mae_pct"] == "2.50%"
+    assert cards["signed_error_pct"] == "-0.70%"
+    assert cards["hard_evidence_pct"] == "86.0%"
+    assert cards["hard_evidence_traceability_pct"] == "71.0%"
+    assert cards["soft_evidence_pct"] == "57.0%"
+    assert cards["evidence_gap_pct"] == "14.0%"
