@@ -89,10 +89,10 @@ def test_dashboard_service_builds_operator_view_model():
     assert len(view["attribution_gap_rows"]) == 4
     assert view["attribution_gap_rows"][0]["evidence_gap_reason"] == "hard_untraceable"
     assert view["attribution_gap_rows"][-1]["evidence_gap_reason"] == "missing_hard_and_soft"
-    assert view["policy_compliance"]["summary"]["total"] == 5
+    assert view["policy_compliance"]["summary"]["total"] == 11
     assert view["policy_compliance"]["summary"]["unknown"] == 2
-    assert view["policy_compliance"]["checks"][3]["status"] == "WARN"
-    assert view["policy_compliance"]["checks"][4]["status"] == "PASS"
+    assert view["policy_compliance"]["checks"][6]["status"] == "WARN"
+    assert view["policy_compliance"]["checks"][7]["status"] == "PASS"
     assert len(view["recent_runs"]) == 2
 
 
@@ -214,7 +214,7 @@ def test_dashboard_service_policy_compliance_marks_missing_benchmark_dependencie
             return []
 
     view = build_dashboard_view(MissingBenchmarkRepo())
-    benchmark_check = view["policy_compliance"]["checks"][4]
+    benchmark_check = view["policy_compliance"]["checks"][7]
     assert benchmark_check["status"] == "WARN"
     assert "Missing benchmark series" in benchmark_check["reason"]
 
@@ -227,6 +227,9 @@ def test_dashboard_service_policy_checks_include_as_of_from_latest_run_when_dire
     assert checks[1]["as_of"] == "2026-02-18T01:00:00Z"
     assert checks[2]["as_of"] == "2026-02-18T01:00:00Z"
     assert checks[3]["as_of"] == "2026-02-18T01:00:00Z"
+    assert checks[4]["as_of"] == "2026-02-18T01:00:00Z"
+    assert checks[5]["as_of"] == "2026-02-18T01:00:00Z"
+    assert checks[6]["as_of"] == "2026-02-18T01:00:00Z"
 
 
 def test_dashboard_service_learning_reliability_threshold_env_override(monkeypatch: pytest.MonkeyPatch):
