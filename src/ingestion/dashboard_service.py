@@ -10,6 +10,11 @@ DEFAULT_MIN_REALIZED_BY_HORIZON: dict[str, int] = {"1W": 8, "1M": 12, "3M": 6}
 DEFAULT_COVERAGE_FLOOR: float = 0.4
 DEFAULT_BENCHMARK_MAX_STALE_DAYS: int = 7
 POLICY_CHECK_BENCHMARK_KEYS: tuple[str, ...] = ("QQQ", "KOSPI200", "BTC", "SGOV")
+POLICY_UNIVERSE_REGION_SENTINELS: dict[str, tuple[str, ...]] = {
+    "US": ("QQQ",),
+    "KR": ("KOSPI200",),
+    "CRYPTO": ("BTC",),
+}
 POLICY_LOCK_REFERENCE = "docs/POLICY_LOCK_V1.md"
 
 
@@ -233,12 +238,46 @@ def _build_policy_compliance(
 
     raw_events = int(counters.get("raw_events", 0) or 0)
     canonical_events = int(counters.get("canonical_events", 0) or 0)
-    if raw_events > 0 and canonical_events > 0:
+
+    universe_regions_present: dict[str, bool] = {
+        region: False for region in POLICY_UNIVERSE_REGION_SENTINELS
+    }
+    universe_region_evidence: dict[str, list[dict[str, object]]] = {
+        region: [] for region in POLICY_UNIVERSE_REGION_SENTINELS
+    }
+
+    if hasattr(repository, "read_macro_series_points"):
+        for region, metric_keys in POLICY_UNIVERSE_REGION_SENTINELS.items():
+            for metric_key in metric_keys:
+                points = _safe_repo_call([], repository.read_macro_series_points, metric_key=metric_key, limit=1)
+                if isinstance(points, list) and points:
+                    top = points[0] if isinstance(points[0], dict) else {}
+                    universe_regions_present[region] = True
+                    universe_region_evidence[region].append(
+                        {
+                            "metric_key": metric_key,
+                            "as_of": top.get("as_of"),
+                            "source": top.get("source"),
+                        }
+                    )
+                    break
+
+    missing_regions = [
+        region for region, is_present in universe_regions_present.items() if not is_present
+    ]
+    if all(universe_regions_present.values()):
         universe_status = "PASS"
-        universe_reason = "Data present; region-level US/KR/Crypto tagging pending."
+        universe_reason = "Region-aware HARD evidence confirms US/KR/Crypto coverage."
+    elif raw_events > 0 and canonical_events > 0:
+        universe_status = "WARN"
+        universe_reason = (
+            "Ingest data exists but region-aware coverage evidence is incomplete: "
+            + ", ".join(missing_regions)
+        )
     else:
         universe_status = "WARN"
         universe_reason = "No ingest evidence; universe coverage cannot be validated."
+
     checks.append(
         {
             "check": "Universe coverage (US/KR/Crypto)",
@@ -248,7 +287,10 @@ def _build_policy_compliance(
             "evidence": {
                 "raw_events": raw_events,
                 "canonical_events": canonical_events,
-                "region_dimension_ready": False,
+                "regions_present": universe_regions_present,
+                "missing_regions": missing_regions,
+                "region_metric_evidence": universe_region_evidence,
+                "region_dimension_ready": all(universe_regions_present.values()),
             },
         }
     )

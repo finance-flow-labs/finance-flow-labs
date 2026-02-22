@@ -214,9 +214,33 @@ def test_dashboard_service_policy_compliance_marks_missing_benchmark_dependencie
             return []
 
     view = build_dashboard_view(MissingBenchmarkRepo())
+    universe_check = view["policy_compliance"]["checks"][0]
+    assert universe_check["status"] == "WARN"
+    assert "region-aware coverage evidence is incomplete" in universe_check["reason"]
+    assert universe_check["evidence"]["missing_regions"] == ["US", "KR", "CRYPTO"]
+
     benchmark_check = view["policy_compliance"]["checks"][7]
     assert benchmark_check["status"] == "WARN"
     assert "Missing benchmark series" in benchmark_check["reason"]
+
+
+def test_dashboard_service_universe_compliance_requires_region_evidence_for_each_policy_region():
+    class MissingKrRegionRepo(FakeDashboardRepo):
+        def read_macro_series_points(self, metric_key, limit=1):
+            if metric_key == "KOSPI200":
+                return []
+            return super().read_macro_series_points(metric_key, limit)
+
+    view = build_dashboard_view(MissingKrRegionRepo())
+    universe_check = view["policy_compliance"]["checks"][0]
+
+    assert universe_check["status"] == "WARN"
+    assert universe_check["evidence"]["regions_present"] == {
+        "US": True,
+        "KR": False,
+        "CRYPTO": True,
+    }
+    assert universe_check["evidence"]["missing_regions"] == ["KR"]
 
 
 def test_dashboard_service_policy_compliance_marks_stale_benchmark_dependencies_warn():
