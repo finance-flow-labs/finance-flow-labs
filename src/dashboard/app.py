@@ -39,6 +39,57 @@ LOCKED_POLICY_ROWS: tuple[tuple[str, str], ...] = (
     ("Reporting", "Daily summary + immediate critical-event alerts"),
 )
 
+KPI_LAYOUT_TIERS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "Tier 1 · Critical",
+        (
+            "last_status",
+            "primary_reliability",
+            "policy_summary",
+            "evidence_gap_count",
+        ),
+    ),
+    (
+        "Tier 2 · Core Pipeline",
+        (
+            "raw_events",
+            "canonical_events",
+            "quarantine_events",
+            "forecast_count",
+            "realized_count",
+            "coverage_pct",
+        ),
+    ),
+    (
+        "Tier 2 · Core Pipeline (cont.)",
+        (
+            "hit_rate_pct",
+        ),
+    ),
+    (
+        "Tier 3 · Diagnostics",
+        (
+            "mae_pct",
+            "signed_error_pct",
+            "attribution_total",
+            "attribution_top_category",
+            "hard_evidence_traceability_pct",
+            "soft_evidence_pct",
+        ),
+    ),
+    (
+        "Tier 3 · Diagnostics (cont.)",
+        (
+            "hard_evidence_pct",
+            "evidence_gap_pct",
+        ),
+    ),
+)
+
+
+def get_kpi_layout_tiers() -> tuple[tuple[str, tuple[str, ...]], ...]:
+    return KPI_LAYOUT_TIERS
+
 
 def _is_placeholder(value: object) -> bool:
     return isinstance(value, str) and value.strip().lower() in PLACEHOLDER_STRINGS
@@ -277,6 +328,45 @@ def _metric_delta(cards: Mapping[str, object], key: str) -> str | None:
     return status if status in {"unknown", "error"} else None
 
 
+def _policy_summary_label(cards: Mapping[str, object]) -> str:
+    summary = cards.get("policy_compliance_summary", {})
+    if not isinstance(summary, Mapping):
+        return "n/a"
+    fail = int(summary.get("fail", 0) or 0)
+    warn = int(summary.get("warn", 0) or 0)
+    unknown = int(summary.get("unknown", 0) or 0)
+    return f"F:{fail} W:{warn} U:{unknown}"
+
+
+def _policy_summary_delta(cards: Mapping[str, object]) -> str:
+    summary = cards.get("policy_compliance_summary", {})
+    if not isinstance(summary, Mapping):
+        return "unknown"
+    fail = int(summary.get("fail", 0) or 0)
+    warn = int(summary.get("warn", 0) or 0)
+    unknown = int(summary.get("unknown", 0) or 0)
+    if fail > 0:
+        return "FAIL"
+    if warn > 0:
+        return "WARN"
+    if unknown > 0:
+        return "UNKNOWN"
+    return "PASS"
+
+
+def _primary_reliability(cards: Mapping[str, object]) -> tuple[str, str | None]:
+    panel = cards.get("learning_metrics_panel", [])
+    if not isinstance(panel, list):
+        return ("n/a", "unknown")
+    row = next((item for item in panel if isinstance(item, Mapping) and item.get("horizon") == "1M"), None)
+    if not isinstance(row, Mapping):
+        return ("n/a", "unknown")
+    return (
+        str(row.get("reliability_badge", "n/a")),
+        str(row.get("status")) if row.get("status") in {"warn", "unknown", "error"} else None,
+    )
+
+
 def load_dashboard_view(dsn: str) -> dict[str, object]:
     dashboard_service = importlib.import_module("src.ingestion.dashboard_service")
     postgres_repository = importlib.import_module("src.ingestion.postgres_repository")
@@ -309,27 +399,82 @@ def run_streamlit_app(dsn: str) -> None:
             "No forecast records yet. Seed the learning loop with `python3 -m src.ingestion.cli forecast-record-create ...` (see docs/ingestion-runbook.md)."
         )
 
-    c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16 = st.columns(16)
-    c1.metric("Last Status", cards["last_run_status"], cards["last_run_time"])
-    c2.metric("Raw", cards["raw_events"], _metric_delta(cards, "raw_events"))
-    c3.metric("Canonical", cards["canonical_events"], _metric_delta(cards, "canonical_events"))
-    c4.metric("Quarantine", cards["quarantine_events"], _metric_delta(cards, "quarantine_events"))
-    c5.metric("1M Forecasts", cards["forecast_count"], _metric_delta(cards, "forecast_count"))
-    c6.metric("1M Realized", cards["realized_count"], _metric_delta(cards, "realized_count"))
-    c7.metric("1M Coverage", cards["coverage_pct"], _metric_delta(cards, "coverage_pct"))
-    c8.metric("1M Hit Rate", cards["hit_rate_pct"], _metric_delta(cards, "hit_rate_pct"))
-    c9.metric("1M MAE", cards["mae_pct"], _metric_delta(cards, "mae_pct"))
-    c10.metric("1M Bias", cards["signed_error_pct"], _metric_delta(cards, "signed_error_pct"))
-    c11.metric("1M Attr", cards["attribution_total"], _metric_delta(cards, "attribution_total"))
-    c12.metric("Top Attr", cards["attribution_top_category"], cards["attribution_top_count"])
-    c13.metric("HARD Evd", cards["hard_evidence_pct"], _metric_delta(cards, "hard_evidence_pct"))
-    c14.metric(
-        "HARD Trace",
-        cards["hard_evidence_traceability_pct"],
-        _metric_delta(cards, "hard_evidence_traceability_pct"),
-    )
-    c15.metric("SOFT Evd", cards["soft_evidence_pct"], _metric_delta(cards, "soft_evidence_pct"))
-    c16.metric("No-Evd Attr", cards["evidence_gap_count"], cards["evidence_gap_pct"])
+    tier_specs = {
+        "last_status": ("Last Status", cards["last_run_status"], cards["last_run_time"]),
+        "primary_reliability": ("1M Reliability", *_primary_reliability(cards)),
+        "policy_summary": (
+            "Policy Summary",
+            _policy_summary_label(cards),
+            _policy_summary_delta(cards),
+        ),
+        "evidence_gap_count": ("No-Evd Attr", cards["evidence_gap_count"], cards["evidence_gap_pct"]),
+        "raw_events": ("Raw", cards["raw_events"], _metric_delta(cards, "raw_events")),
+        "canonical_events": (
+            "Canonical",
+            cards["canonical_events"],
+            _metric_delta(cards, "canonical_events"),
+        ),
+        "quarantine_events": (
+            "Quarantine",
+            cards["quarantine_events"],
+            _metric_delta(cards, "quarantine_events"),
+        ),
+        "forecast_count": (
+            "1M Forecasts",
+            cards["forecast_count"],
+            _metric_delta(cards, "forecast_count"),
+        ),
+        "realized_count": (
+            "1M Realized",
+            cards["realized_count"],
+            _metric_delta(cards, "realized_count"),
+        ),
+        "coverage_pct": ("1M Coverage", cards["coverage_pct"], _metric_delta(cards, "coverage_pct")),
+        "hit_rate_pct": ("1M Hit Rate", cards["hit_rate_pct"], _metric_delta(cards, "hit_rate_pct")),
+        "mae_pct": ("1M MAE", cards["mae_pct"], _metric_delta(cards, "mae_pct")),
+        "signed_error_pct": (
+            "1M Bias",
+            cards["signed_error_pct"],
+            _metric_delta(cards, "signed_error_pct"),
+        ),
+        "attribution_total": (
+            "1M Attr",
+            cards["attribution_total"],
+            _metric_delta(cards, "attribution_total"),
+        ),
+        "attribution_top_category": (
+            "Top Attr",
+            cards["attribution_top_category"],
+            cards["attribution_top_count"],
+        ),
+        "hard_evidence_pct": (
+            "HARD Evd",
+            cards["hard_evidence_pct"],
+            _metric_delta(cards, "hard_evidence_pct"),
+        ),
+        "hard_evidence_traceability_pct": (
+            "HARD Trace",
+            cards["hard_evidence_traceability_pct"],
+            _metric_delta(cards, "hard_evidence_traceability_pct"),
+        ),
+        "soft_evidence_pct": (
+            "SOFT Evd",
+            cards["soft_evidence_pct"],
+            _metric_delta(cards, "soft_evidence_pct"),
+        ),
+        "evidence_gap_pct": (
+            "No-Evd %",
+            cards["evidence_gap_pct"],
+            _metric_delta(cards, "evidence_gap_pct"),
+        ),
+    }
+
+    for tier_label, keys in KPI_LAYOUT_TIERS:
+        st.caption(tier_label)
+        cols = st.columns(len(keys))
+        for col, key in zip(cols, keys):
+            label, value, delta = tier_specs[key]
+            col.metric(label, value, delta)
 
     learning_panel = cards.get("learning_metrics_panel", [])
     if isinstance(learning_panel, list) and learning_panel:

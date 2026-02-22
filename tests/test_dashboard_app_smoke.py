@@ -9,6 +9,34 @@ def test_dashboard_app_module_loads():
     assert hasattr(dashboard_app, "build_operator_cards")
 
 
+def test_dashboard_app_kpi_layout_is_tiered_and_bounded():
+    tiers = dashboard_app.get_kpi_layout_tiers()
+    assert all(len(keys) <= 6 for _, keys in tiers)
+
+    rendered_keys = {key for _, keys in tiers for key in keys}
+    assert rendered_keys == {
+        "last_status",
+        "primary_reliability",
+        "policy_summary",
+        "evidence_gap_count",
+        "raw_events",
+        "canonical_events",
+        "quarantine_events",
+        "forecast_count",
+        "realized_count",
+        "coverage_pct",
+        "hit_rate_pct",
+        "mae_pct",
+        "signed_error_pct",
+        "attribution_total",
+        "attribution_top_category",
+        "hard_evidence_pct",
+        "hard_evidence_traceability_pct",
+        "soft_evidence_pct",
+        "evidence_gap_pct",
+    }
+
+
 def test_dashboard_app_builds_cards_from_view_model():
     cards = dashboard_app.build_operator_cards(
         {
