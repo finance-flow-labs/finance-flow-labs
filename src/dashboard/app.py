@@ -25,6 +25,19 @@ RELIABILITY_BADGES = {
     "insufficient": "🔴 insufficient",
 }
 
+LOCKED_POLICY_ROWS: tuple[tuple[str, str], ...] = (
+    ("Universe", "US + KR + Crypto"),
+    ("KR asset scope", "Index + ETF + single stocks"),
+    ("Crypto scope", "BTC/ETH core + top alts 일부"),
+    ("Max MDD guardrail", "-30%"),
+    ("Leverage sleeve cap", "20%"),
+    ("Benchmark composite", "45% QQQ + 25% KOSPI200 proxy + 20% BTC + 10% SGOV"),
+    ("Primary evaluation horizon", "1M (aux: 1W, 3M)"),
+    ("Rebalancing cadence", "Quarterly"),
+    ("Execution mode", "Paper-trade auto, real-trade manual approval"),
+    ("Reporting", "Daily summary + immediate critical-event alerts"),
+)
+
 
 def _is_placeholder(value: object) -> bool:
     return isinstance(value, str) and value.strip().lower() in PLACEHOLDER_STRINGS
@@ -213,6 +226,17 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         and primary_horizon_row.get("reliability") in {"insufficient", "low_sample"}
     )
 
+    policy_compliance_panel = [
+        {
+            "policy_item": item,
+            "locked_value": locked_value,
+            "observed_value": "locked",
+            "status": "ok",
+            "note": "Policy lock v1.1",
+        }
+        for item, locked_value in LOCKED_POLICY_ROWS
+    ]
+
     return {
         "last_run_status": str(view.get("last_run_status", "no-data")),
         "last_run_time": str(view.get("last_run_time", "")),
@@ -221,6 +245,7 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         "has_critical_metric_alert": critical_unknown_or_error or has_horizon_alert,
         "has_primary_horizon_reliability_alert": primary_horizon_reliability_alert,
         "learning_metrics_panel": horizon_rows,
+        "policy_compliance_panel": policy_compliance_panel,
     }
 
 
@@ -287,6 +312,11 @@ def run_streamlit_app(dsn: str) -> None:
     if isinstance(learning_panel, list) and learning_panel:
         st.subheader("Multi-horizon Learning Metrics")
         st.dataframe(learning_panel, use_container_width=True)
+
+    policy_panel = cards.get("policy_compliance_panel", [])
+    if isinstance(policy_panel, list) and policy_panel:
+        st.subheader("Policy Compliance (Locked Constraints)")
+        st.dataframe(policy_panel, use_container_width=True)
 
     attribution_gap_rows = view.get("attribution_gap_rows", [])
     if isinstance(attribution_gap_rows, list):
