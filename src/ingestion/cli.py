@@ -34,6 +34,10 @@ def build_parser() -> argparse.ArgumentParser:
     _ = forecast_error_attributions.add_argument("--horizon", default="1M")
     _ = forecast_error_attributions.add_argument("--limit", type=int, default=50)
 
+    forecast_error_category_stats = subparsers.add_parser("forecast-error-category-stats")
+    _ = forecast_error_category_stats.add_argument("--horizon", default="1M")
+    _ = forecast_error_category_stats.add_argument("--limit", type=int, default=20)
+
     return parser
 
 
@@ -132,6 +136,17 @@ def read_forecast_error_attributions_command(
     return repository.read_forecast_error_attributions(horizon=horizon, limit=limit)
 
 
+def read_forecast_error_category_stats_command(
+    horizon: str = "1M", limit: int = 20
+) -> list[dict[str, object]]:
+    dsn = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
+    if not dsn:
+        raise ValueError("SUPABASE_DB_URL or DATABASE_URL is required")
+
+    repository = PostgresRepository(dsn=dsn)
+    return repository.read_forecast_error_category_stats(horizon=horizon, limit=limit)
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -148,6 +163,11 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.command == "forecast-error-attributions":
         rows = read_forecast_error_attributions_command(horizon=args.horizon, limit=args.limit)
+        print(json.dumps(rows, default=str))
+        return 0
+
+    if args.command == "forecast-error-category-stats":
+        rows = read_forecast_error_category_stats_command(horizon=args.horizon, limit=args.limit)
         print(json.dumps(rows, default=str))
         return 0
 
