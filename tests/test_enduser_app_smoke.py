@@ -15,7 +15,7 @@ class _TabContext:
 
 
 def test_run_enduser_app_renders_portfolio_and_signals_tabs(monkeypatch):
-    calls: dict[str, object] = {"tabs": None, "info": []}
+    calls: dict[str, object] = {"tabs": None, "info": [], "subheader": []}
 
     def set_page_config(**kwargs):
         calls["page_config"] = kwargs
@@ -23,15 +23,27 @@ def test_run_enduser_app_renders_portfolio_and_signals_tabs(monkeypatch):
     def title(text: str):
         calls["title"] = text
 
-    def caption(text: str):
-        calls["caption"] = text
-
     def tabs(labels: list[str]):
         calls["tabs"] = labels
         return [_TabContext(), _TabContext()]
 
+    def subheader(text: str):
+        calls["subheader"].append(text)
+
     def info(text: str):
         calls["info"].append(text)
+
+    def markdown(text: str):
+        calls.setdefault("markdown", []).append(text)
+
+    def caption(text: str):
+        calls.setdefault("captions", []).append(text)
+
+    def write(text: str):
+        calls.setdefault("write", []).append(text)
+
+    def progress(value: float):
+        calls.setdefault("progress", []).append(value)
 
     fake_streamlit = types.SimpleNamespace(
         set_page_config=set_page_config,
@@ -39,6 +51,10 @@ def test_run_enduser_app_renders_portfolio_and_signals_tabs(monkeypatch):
         caption=caption,
         tabs=tabs,
         info=info,
+        subheader=subheader,
+        markdown=markdown,
+        write=write,
+        progress=progress,
     )
 
     monkeypatch.setitem(__import__("sys").modules, "streamlit", fake_streamlit)
@@ -47,7 +63,12 @@ def test_run_enduser_app_renders_portfolio_and_signals_tabs(monkeypatch):
     app.run_enduser_app("postgres://example")
 
     assert calls["tabs"] == ["Portfolio", "Signals"]
-    assert calls["info"] == ["Coming soon", "Coming soon"]
+    assert calls["subheader"] == ["Macro regime signal"]
+    assert calls["info"] == [
+        "Coming soon",
+        "No macro regime signal yet. Analysis pipeline data is pending.",
+        "More signal cards coming soon",
+    ]
 
 
 def test_enduser_entrypoint_requires_database_url(monkeypatch):
