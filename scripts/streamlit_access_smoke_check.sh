@@ -7,6 +7,7 @@ BACKOFF_SECONDS="${BACKOFF_SECONDS:-0.5}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-15}"
 DEPLOY_ACCESS_MODE="${DEPLOY_ACCESS_MODE:-public}"
 DEPLOY_RESTRICTED_LOGIN_PATH="${DEPLOY_RESTRICTED_LOGIN_PATH:-}"
+OUTPUT_JSON_PATH="${OUTPUT_JSON_PATH:-}"
 
 cmd=(
   python3 -m src.ingestion.cli deploy-access-gate
@@ -21,4 +22,8 @@ if [[ -n "$DEPLOY_RESTRICTED_LOGIN_PATH" ]]; then
   cmd+=(--restricted-login-path "$DEPLOY_RESTRICTED_LOGIN_PATH")
 fi
 
-"${cmd[@]}"
+if [[ -n "$OUTPUT_JSON_PATH" ]]; then
+  "${cmd[@]}" | tee "$OUTPUT_JSON_PATH"
+else
+  "${cmd[@]}"
+fi
