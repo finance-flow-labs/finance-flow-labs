@@ -381,48 +381,53 @@ class PostgresRepository:
         """Read forecast-error attribution rows for learning-loop diagnostics.
 
         Keeps HARD/SOFT evidence separated for traceable post-mortem analysis.
+        Missing learning-loop tables must not crash operator dashboards.
         """
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()
-        cursor.execute(
-            """
-            SELECT
-                fea.id AS attribution_id,
-                fea.realization_id,
-                fea.category,
-                fea.contribution,
-                fea.note,
-                fea.evidence_hard,
-                fea.evidence_soft,
-                fea.created_at,
-                rr.forecast_id,
-                rr.realized_return,
-                rr.forecast_error,
-                rr.hit,
-                rr.evaluated_at,
-                fr.horizon,
-                fr.thesis_id,
-                fr.as_of,
-                fr.expected_return_low,
-                fr.expected_return_high,
-                it.scope_level,
-                it.target_id,
-                it.title
-            FROM forecast_error_attributions fea
-            JOIN realization_records rr ON rr.id = fea.realization_id
-            JOIN forecast_records fr ON fr.id = rr.forecast_id
-            JOIN investment_theses it ON it.thesis_id = fr.thesis_id
-            WHERE fr.horizon = %s
-            ORDER BY rr.evaluated_at DESC, fea.id DESC
-            LIMIT %s
-            """,
-            (horizon, limit),
-        )
-        rows = cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]
-        cursor.close()
-        conn.close()
-        return [dict(zip(columns, row)) for row in rows]
+        try:
+            cursor.execute(
+                """
+                SELECT
+                    fea.id AS attribution_id,
+                    fea.realization_id,
+                    fea.category,
+                    fea.contribution,
+                    fea.note,
+                    fea.evidence_hard,
+                    fea.evidence_soft,
+                    fea.created_at,
+                    rr.forecast_id,
+                    rr.realized_return,
+                    rr.forecast_error,
+                    rr.hit,
+                    rr.evaluated_at,
+                    fr.horizon,
+                    fr.thesis_id,
+                    fr.as_of,
+                    fr.expected_return_low,
+                    fr.expected_return_high,
+                    it.scope_level,
+                    it.target_id,
+                    it.title
+                FROM forecast_error_attributions fea
+                JOIN realization_records rr ON rr.id = fea.realization_id
+                JOIN forecast_records fr ON fr.id = rr.forecast_id
+                JOIN investment_theses it ON it.thesis_id = fr.thesis_id
+                WHERE fr.horizon = %s
+                ORDER BY rr.evaluated_at DESC, fea.id DESC
+                LIMIT %s
+                """,
+                (horizon, limit),
+            )
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            return [dict(zip(columns, row)) for row in rows]
+        except Exception:
+            return []
+        finally:
+            cursor.close()
+            conn.close()
 
     def read_expected_vs_realized(
         self,
@@ -432,82 +437,94 @@ class PostgresRepository:
         """Read forecast-vs-realization rows for learning loop evaluation.
 
         Returns thesis metadata and HARD/SOFT evidence columns for traceability.
+        Missing learning-loop tables must not crash consumers.
         """
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()
-        cursor.execute(
-            """
-            SELECT
-                fr.id AS forecast_id,
-                fr.horizon,
-                fr.as_of,
-                fr.expected_return_low,
-                fr.expected_return_high,
-                fr.expected_volatility,
-                fr.expected_drawdown,
-                fr.confidence,
-                fr.key_drivers,
-                fr.evidence_hard AS forecast_evidence_hard,
-                fr.evidence_soft AS forecast_evidence_soft,
-                rr.id AS realization_id,
-                rr.realized_return,
-                rr.realized_volatility,
-                rr.max_drawdown,
-                rr.hit,
-                rr.forecast_error,
-                rr.evaluated_at,
-                it.thesis_id,
-                it.scope_level,
-                it.target_id,
-                it.title,
-                it.summary,
-                it.evidence_hard AS thesis_evidence_hard,
-                it.evidence_soft AS thesis_evidence_soft
-            FROM forecast_records fr
-            JOIN investment_theses it ON it.thesis_id = fr.thesis_id
-            LEFT JOIN realization_records rr ON rr.forecast_id = fr.id
-            WHERE fr.horizon = %s
-            ORDER BY fr.as_of DESC, fr.id DESC
-            LIMIT %s
-            """,
-            (horizon, limit),
-        )
-        rows = cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]
-        cursor.close()
-        conn.close()
-        return [dict(zip(columns, row)) for row in rows]
+        try:
+            cursor.execute(
+                """
+                SELECT
+                    fr.id AS forecast_id,
+                    fr.horizon,
+                    fr.as_of,
+                    fr.expected_return_low,
+                    fr.expected_return_high,
+                    fr.expected_volatility,
+                    fr.expected_drawdown,
+                    fr.confidence,
+                    fr.key_drivers,
+                    fr.evidence_hard AS forecast_evidence_hard,
+                    fr.evidence_soft AS forecast_evidence_soft,
+                    rr.id AS realization_id,
+                    rr.realized_return,
+                    rr.realized_volatility,
+                    rr.max_drawdown,
+                    rr.hit,
+                    rr.forecast_error,
+                    rr.evaluated_at,
+                    it.thesis_id,
+                    it.scope_level,
+                    it.target_id,
+                    it.title,
+                    it.summary,
+                    it.evidence_hard AS thesis_evidence_hard,
+                    it.evidence_soft AS thesis_evidence_soft
+                FROM forecast_records fr
+                JOIN investment_theses it ON it.thesis_id = fr.thesis_id
+                LEFT JOIN realization_records rr ON rr.forecast_id = fr.id
+                WHERE fr.horizon = %s
+                ORDER BY fr.as_of DESC, fr.id DESC
+                LIMIT %s
+                """,
+                (horizon, limit),
+            )
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            return [dict(zip(columns, row)) for row in rows]
+        except Exception:
+            return []
+        finally:
+            cursor.close()
+            conn.close()
 
     def read_forecast_error_category_stats(
         self,
         horizon: str = "1M",
         limit: int = 20,
     ) -> list[dict[str, object]]:
-        """Aggregate attribution categories for forecast-error learning automation."""
+        """Aggregate attribution categories for forecast-error learning automation.
+
+        Missing learning-loop tables must not crash operator dashboards.
+        """
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()
-        cursor.execute(
-            """
-            SELECT
-                fea.category,
-                COUNT(*) AS attribution_count,
-                AVG(fea.contribution) AS mean_contribution,
-                AVG(ABS(fea.contribution)) AS mean_abs_contribution
-            FROM forecast_error_attributions fea
-            JOIN realization_records rr ON rr.id = fea.realization_id
-            JOIN forecast_records fr ON fr.id = rr.forecast_id
-            WHERE fr.horizon = %s
-            GROUP BY fea.category
-            ORDER BY attribution_count DESC, fea.category ASC
-            LIMIT %s
-            """,
-            (horizon, limit),
-        )
-        rows = cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]
-        cursor.close()
-        conn.close()
-        return [dict(zip(columns, row)) for row in rows]
+        try:
+            cursor.execute(
+                """
+                SELECT
+                    fea.category,
+                    COUNT(*) AS attribution_count,
+                    AVG(fea.contribution) AS mean_contribution,
+                    AVG(ABS(fea.contribution)) AS mean_abs_contribution
+                FROM forecast_error_attributions fea
+                JOIN realization_records rr ON rr.id = fea.realization_id
+                JOIN forecast_records fr ON fr.id = rr.forecast_id
+                WHERE fr.horizon = %s
+                GROUP BY fea.category
+                ORDER BY attribution_count DESC, fea.category ASC
+                LIMIT %s
+                """,
+                (horizon, limit),
+            )
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            return [dict(zip(columns, row)) for row in rows]
+        except Exception:
+            return []
+        finally:
+            cursor.close()
+            conn.close()
 
     def write_raw(self, row: Mapping[str, object]) -> None:
         conn: ConnectionProtocol = self._connect()
@@ -599,36 +616,28 @@ class PostgresRepository:
     def read_latest_runs(self, limit: int = 20) -> list[dict[str, object]]:
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()
-        cursor.execute(
-            """
-            SELECT run_id, status, finished_at
-            FROM ingestion_runs
-            ORDER BY finished_at DESC
-            LIMIT %s
-            """,
-            (limit,),
-        )
-        rows = cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]
-        cursor.close()
-        conn.close()
-        return [dict(zip(columns, row)) for row in rows]
+        try:
+            cursor.execute(
+                """
+                SELECT run_id, status, finished_at
+                FROM ingestion_runs
+                ORDER BY finished_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            return [dict(zip(columns, row)) for row in rows]
+        except Exception:
+            return []
+        finally:
+            cursor.close()
+            conn.close()
 
     def read_status_counters(self) -> dict[str, int]:
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()
-
-        cursor.execute("SELECT COUNT(*) FROM raw_event_store", ())
-        raw_row = cursor.fetchone() or (0,)
-
-        cursor.execute("SELECT COUNT(*) FROM canonical_fact_store", ())
-        canonical_row = cursor.fetchone() or (0,)
-
-        cursor.execute("SELECT COUNT(*) FROM quarantine_batches", ())
-        quarantine_row = cursor.fetchone() or (0,)
-
-        cursor.close()
-        conn.close()
 
         def to_int(value: object) -> int:
             if isinstance(value, bool):
@@ -641,45 +650,38 @@ class PostgresRepository:
                 return int(value)
             return 0
 
-        return {
-            "raw_events": to_int(raw_row[0]),
-            "canonical_events": to_int(canonical_row[0]),
-            "quarantine_events": to_int(quarantine_row[0]),
-        }
+        try:
+            cursor.execute("SELECT COUNT(*) FROM raw_event_store", ())
+            raw_row = cursor.fetchone() or (0,)
+
+            cursor.execute("SELECT COUNT(*) FROM canonical_fact_store", ())
+            canonical_row = cursor.fetchone() or (0,)
+
+            cursor.execute("SELECT COUNT(*) FROM quarantine_batches", ())
+            quarantine_row = cursor.fetchone() or (0,)
+
+            return {
+                "raw_events": to_int(raw_row[0]),
+                "canonical_events": to_int(canonical_row[0]),
+                "quarantine_events": to_int(quarantine_row[0]),
+            }
+        except Exception:
+            return {
+                "raw_events": 0,
+                "canonical_events": 0,
+                "quarantine_events": 0,
+            }
+        finally:
+            cursor.close()
+            conn.close()
 
     def read_learning_metrics(self, horizon: str = "1M") -> dict[str, object]:
-        """Return realized forecast quality metrics for learning-loop monitoring."""
+        """Return realized forecast quality metrics for learning-loop monitoring.
+
+        Missing learning-loop tables must not crash operator dashboards.
+        """
         conn: ConnectionProtocol = self._connect()
         cursor: CursorProtocol = conn.cursor()
-
-        cursor.execute(
-            """
-            SELECT
-                COUNT(*) AS forecast_count
-            FROM forecast_records
-            WHERE horizon = %s
-            """,
-            (horizon,),
-        )
-        forecast_row = cursor.fetchone() or (0,)
-
-        cursor.execute(
-            """
-            SELECT
-                COUNT(*) AS realized_count,
-                AVG(CASE WHEN rr.hit THEN 1.0 ELSE 0.0 END) AS hit_rate,
-                AVG(ABS(rr.forecast_error)) AS mean_abs_forecast_error,
-                AVG(rr.forecast_error) AS mean_signed_forecast_error
-            FROM realization_records rr
-            JOIN forecast_records fr ON fr.id = rr.forecast_id
-            WHERE fr.horizon = %s
-            """,
-            (horizon,),
-        )
-        row = cursor.fetchone() or (0, None, None, None)
-
-        cursor.close()
-        conn.close()
 
         def to_int(value: object) -> int:
             if isinstance(value, bool):
@@ -703,22 +705,62 @@ class PostgresRepository:
                 return float(value)
             return None
 
-        forecast_count = to_int(forecast_row[0])
-        realized_count = to_int(row[0])
+        try:
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*) AS forecast_count
+                FROM forecast_records
+                WHERE horizon = %s
+                """,
+                (horizon,),
+            )
+            forecast_row = cursor.fetchone() or (0,)
 
-        realization_coverage = None
-        if forecast_count > 0:
-            realization_coverage = realized_count / forecast_count
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*) AS realized_count,
+                    AVG(CASE WHEN rr.hit THEN 1.0 ELSE 0.0 END) AS hit_rate,
+                    AVG(ABS(rr.forecast_error)) AS mean_abs_forecast_error,
+                    AVG(rr.forecast_error) AS mean_signed_forecast_error
+                FROM realization_records rr
+                JOIN forecast_records fr ON fr.id = rr.forecast_id
+                WHERE fr.horizon = %s
+                """,
+                (horizon,),
+            )
+            row = cursor.fetchone() or (0, None, None, None)
 
-        return {
-            "horizon": horizon,
-            "forecast_count": forecast_count,
-            "realized_count": realized_count,
-            "realization_coverage": realization_coverage,
-            "hit_rate": to_float_or_none(row[1]),
-            "mean_abs_forecast_error": to_float_or_none(row[2]),
-            "mean_signed_forecast_error": to_float_or_none(row[3]),
-        }
+            forecast_count = to_int(forecast_row[0])
+            realized_count = to_int(row[0])
+
+            realization_coverage = None
+            if forecast_count > 0:
+                realization_coverage = realized_count / forecast_count
+
+            return {
+                "horizon": horizon,
+                "forecast_count": forecast_count,
+                "realized_count": realized_count,
+                "realization_coverage": realization_coverage,
+                "hit_rate": to_float_or_none(row[1]),
+                "mean_abs_forecast_error": to_float_or_none(row[2]),
+                "mean_signed_forecast_error": to_float_or_none(row[3]),
+            }
+        except Exception:
+            return {
+                "horizon": horizon,
+                "forecast_count": 0,
+                "realized_count": 0,
+                "realization_coverage": None,
+                "hit_rate": None,
+                "mean_abs_forecast_error": None,
+                "mean_signed_forecast_error": None,
+            }
+        finally:
+            cursor.close()
+            conn.close()
 
     def write_macro_series_points(self, points: list[NormalizedSeriesPoint]) -> int:
         if not points:
