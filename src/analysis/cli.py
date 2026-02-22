@@ -10,6 +10,7 @@ Usage:
     python -m src.analysis.cli anomaly <source> <series_id> [--window N] [--threshold F]
     python -m src.analysis.cli stock dart <name_or_ticker> [--year YYYY]
     python -m src.analysis.cli stock edgar <name_or_ticker>
+    python -m src.analysis.cli stock fmp <name_or_ticker> [--limit N]
 
 All subcommands output JSON to stdout.
 """
@@ -25,7 +26,7 @@ from src.analysis.news_client import NewsClient
 from src.analysis.document_client import DocumentClient
 from src.analysis.transcript_client import TranscriptClient
 from src.analysis.channel_client import ChannelClient
-from src.analysis.stock_client import DartStockClient, EdgarStockClient
+from src.analysis.stock_client import DartStockClient, EdgarStockClient, FmpStockClient
 
 
 def cmd_series(args: argparse.Namespace) -> None:
@@ -75,21 +76,29 @@ def cmd_stock(args: argparse.Namespace) -> None:
         else:
             result = {"companies": client.search_company(args.query)}  # type: ignore[assignment]
         print(json.dumps(result, ensure_ascii=False, indent=2))
-    else:  # edgar
-        client_us = EdgarStockClient()
-        companies = client_us.search_company(args.query)
-        if companies:
-            cik = companies[0]["cik"]
-            facts = client_us.fetch_company_facts(cik)
-            filings = client_us.fetch_recent_filings(cik, limit=5)
-            result = {  # type: ignore[assignment]
-                "companies": companies,
-                "facts": facts,
-                "recent_filings": filings,
-            }
-        else:
-            result = {"companies": [], "facts": {}, "recent_filings": []}  # type: ignore[assignment]
+        return
+
+    if args.market == "fmp":
+        client_fmp = FmpStockClient()
+        result = client_fmp.fetch_snapshot(args.query, limit=args.limit)
         print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
+    # edgar
+    client_us = EdgarStockClient()
+    companies = client_us.search_company(args.query)
+    if companies:
+        cik = companies[0]["cik"]
+        facts = client_us.fetch_company_facts(cik)
+        filings = client_us.fetch_recent_filings(cik, limit=5)
+        result = {  # type: ignore[assignment]
+            "companies": companies,
+            "facts": facts,
+            "recent_filings": filings,
+        }
+    else:
+        result = {"companies": [], "facts": {}, "recent_filings": []}  # type: ignore[assignment]
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def cmd_anomaly(args: argparse.Namespace) -> None:
@@ -181,6 +190,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_edgar.add_argument("query", help="Company name or ticker (e.g. Apple, AAPL)")
     p_edgar.add_argument("--year", type=int, default=None, help="(unused for EDGAR, reserved)")
     p_edgar.set_defaults(func=cmd_stock)
+
+    p_fmp = p_stock_sub.add_parser("fmp", help="Fetch valuation/consensus data via FMP")
+    p_fmp.add_argument("query", help="Company name or ticker (e.g. Alphabet, GOOGL)")
+    p_fmp.add_argument("--limit", type=int, default=5, help="Rows per FMP endpoint")
+    p_fmp.set_defaults(func=cmd_stock)
 
     return parser
 

@@ -28,7 +28,7 @@ python3 -m src.analysis.cli stock edgar "Apple"
 
 검색 결과에서 회사명, 티커, corp_code(KR) 또는 CIK(US)를 확인하라.
 
-#### 1-2. 재무제표 수집
+#### 1-2. 재무제표/밸류에이션 수집
 
 ```bash
 # 한국: 최근 2개년 재무제표 (corp_code 또는 티커)
@@ -37,7 +37,14 @@ python3 -m src.analysis.cli stock dart "005930" --year 2023
 
 # 미국: XBRL company facts (티커 또는 CIK)
 python3 -m src.analysis.cli stock edgar "AAPL"
+
+# 미국(선택): 주가/멀티플/컨센서스(FMP)
+# 필요 ENV: FMP_API_KEY
+python3 -m src.analysis.cli stock fmp "AAPL" --limit 5
 ```
+
+> FMP 호출이 401/403 또는 플랜 제한으로 실패해도 분석을 중단하지 말고,
+> EDGAR + 뉴스 + 거시 데이터 기반으로 계속 진행하라. FMP 미수집 항목은 Needs Data에 명시하라.
 
 #### 1-3. 주식 관련 뉴스 수집
 
