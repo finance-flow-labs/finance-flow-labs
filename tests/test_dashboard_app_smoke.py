@@ -26,6 +26,11 @@ def test_dashboard_app_builds_cards_from_view_model():
                 "hit_rate": 0.6,
                 "mean_abs_forecast_error": 0.025,
             },
+            "attribution_summary": {
+                "total": 7,
+                "top_category": "macro_miss",
+                "top_count": 3,
+            },
             "recent_runs": [],
         }
     )
@@ -38,3 +43,6 @@ def test_dashboard_app_builds_cards_from_view_model():
     assert cards["coverage_pct"] == "40.0%"
     assert cards["hit_rate_pct"] == "60.0%"
     assert cards["mae_pct"] == "2.50%"
+    assert cards["attribution_total"] == 7
+    assert cards["attribution_top_category"] == "macro_miss"
+    assert cards["attribution_top_count"] == 3

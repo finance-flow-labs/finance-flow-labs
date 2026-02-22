@@ -39,6 +39,16 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         hit_rate = None
         mae = None
 
+    attribution_summary = view.get("attribution_summary", {})
+    if isinstance(attribution_summary, Mapping):
+        attribution_total = to_int(attribution_summary.get("total", 0))
+        top_category = str(attribution_summary.get("top_category", "n/a"))
+        top_count = to_int(attribution_summary.get("top_count", 0))
+    else:
+        attribution_total = 0
+        top_category = "n/a"
+        top_count = 0
+
     coverage_pct = "n/a" if not isinstance(realization_coverage, (int, float)) else f"{realization_coverage * 100:.1f}%"
     hit_rate_pct = "n/a" if not isinstance(hit_rate, (int, float)) else f"{hit_rate * 100:.1f}%"
     mae_pct = "n/a" if not isinstance(mae, (int, float)) else f"{mae * 100:.2f}%"
@@ -54,6 +64,9 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         "coverage_pct": coverage_pct,
         "hit_rate_pct": hit_rate_pct,
         "mae_pct": mae_pct,
+        "attribution_total": attribution_total,
+        "attribution_top_category": top_category,
+        "attribution_top_count": top_count,
     }
 
 
@@ -75,7 +88,7 @@ def run_streamlit_app(dsn: str) -> None:
     st.title("Ingestion Operator Dashboard")
     st.caption("Manual update monitoring (cron separated)")
 
-    c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns(9)
+    c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11 = st.columns(11)
     c1.metric("Last Status", cards["last_run_status"], cards["last_run_time"])
     c2.metric("Raw", cards["raw_events"])
     c3.metric("Canonical", cards["canonical_events"])
@@ -85,6 +98,8 @@ def run_streamlit_app(dsn: str) -> None:
     c7.metric("1M Coverage", cards["coverage_pct"])
     c8.metric("1M Hit Rate", cards["hit_rate_pct"])
     c9.metric("1M MAE", cards["mae_pct"])
+    c10.metric("1M Attr", cards["attribution_total"])
+    c11.metric("Top Attr", cards["attribution_top_category"], cards["attribution_top_count"])
 
     recent_runs = view.get("recent_runs", [])
     if isinstance(recent_runs, list) and recent_runs:
