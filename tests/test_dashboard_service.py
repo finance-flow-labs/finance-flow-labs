@@ -362,3 +362,23 @@ def test_dashboard_service_policy_compliance_uses_portfolio_exposure_feed_when_a
     assert checks["Crypto sleeve composition (BTC/ETH >=70%, alts <=30%)"]["status"] == "PASS"
     assert checks["Leverage sleeve cap (<=20%)"]["status"] == "PASS"
     assert view["policy_compliance"]["summary"]["unknown"] == 0
+
+
+def test_dashboard_service_surfaces_deployed_access_from_env(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv(
+        "STREAMLIT_ACCESS_CHECK_JSON",
+        '{"ok": false, "reason": "auth_wall_redirect_detected", "auth_wall_redirect": true, "checked_at": "2026-02-22T15:00:00Z", "remediation_hint": "set app public"}',
+    )
+
+    view = build_dashboard_view(FakeDashboardRepo())
+    assert view["deployed_access"]["status"] == "degraded"
+    assert view["deployed_access"]["reason"] == "auth_wall_redirect_detected"
+    assert view["deployed_access"]["checked_at"] == "2026-02-22T15:00:00Z"
+
+
+def test_dashboard_service_sets_unknown_when_access_json_invalid(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("STREAMLIT_ACCESS_CHECK_JSON", "{not-json")
+
+    view = build_dashboard_view(FakeDashboardRepo())
+    assert view["deployed_access"]["status"] == "unknown"
+    assert view["deployed_access"]["reason"] == "invalid_access_check_json"
