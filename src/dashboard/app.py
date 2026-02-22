@@ -15,8 +15,23 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
             try:
                 return int(value)
             except ValueError:
-                return 0
+                try:
+                    return int(float(value))
+                except ValueError:
+                    return 0
         return 0
+
+    def to_float(value: object) -> float | None:
+        if isinstance(value, bool):
+            return float(int(value))
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except ValueError:
+                return None
+        return None
 
     counters = view.get("counters", {})
     if isinstance(counters, Mapping):
@@ -66,20 +81,25 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         evidence_gap_count = 0
         evidence_gap_coverage = None
 
-    coverage_pct = "n/a" if not isinstance(realization_coverage, (int, float)) else f"{realization_coverage * 100:.1f}%"
-    hit_rate_pct = "n/a" if not isinstance(hit_rate, (int, float)) else f"{hit_rate * 100:.1f}%"
-    mae_pct = "n/a" if not isinstance(mae, (int, float)) else f"{mae * 100:.2f}%"
-    signed_error_pct = (
-        "n/a" if not isinstance(signed_error, (int, float)) else f"{signed_error * 100:.2f}%"
-    )
-    hard_evidence_pct = "n/a" if not isinstance(hard_evidence_coverage, (int, float)) else f"{hard_evidence_coverage * 100:.1f}%"
+    realization_coverage_value = to_float(realization_coverage)
+    hit_rate_value = to_float(hit_rate)
+    mae_value = to_float(mae)
+    signed_error_value = to_float(signed_error)
+    hard_evidence_value = to_float(hard_evidence_coverage)
+    hard_evidence_traceability_value = to_float(hard_evidence_traceability_coverage)
+    soft_evidence_value = to_float(soft_evidence_coverage)
+    evidence_gap_value = to_float(evidence_gap_coverage)
+
+    coverage_pct = "n/a" if realization_coverage_value is None else f"{realization_coverage_value * 100:.1f}%"
+    hit_rate_pct = "n/a" if hit_rate_value is None else f"{hit_rate_value * 100:.1f}%"
+    mae_pct = "n/a" if mae_value is None else f"{mae_value * 100:.2f}%"
+    signed_error_pct = "n/a" if signed_error_value is None else f"{signed_error_value * 100:.2f}%"
+    hard_evidence_pct = "n/a" if hard_evidence_value is None else f"{hard_evidence_value * 100:.1f}%"
     hard_evidence_traceability_pct = (
-        "n/a"
-        if not isinstance(hard_evidence_traceability_coverage, (int, float))
-        else f"{hard_evidence_traceability_coverage * 100:.1f}%"
+        "n/a" if hard_evidence_traceability_value is None else f"{hard_evidence_traceability_value * 100:.1f}%"
     )
-    soft_evidence_pct = "n/a" if not isinstance(soft_evidence_coverage, (int, float)) else f"{soft_evidence_coverage * 100:.1f}%"
-    evidence_gap_pct = "n/a" if not isinstance(evidence_gap_coverage, (int, float)) else f"{evidence_gap_coverage * 100:.1f}%"
+    soft_evidence_pct = "n/a" if soft_evidence_value is None else f"{soft_evidence_value * 100:.1f}%"
+    evidence_gap_pct = "n/a" if evidence_gap_value is None else f"{evidence_gap_value * 100:.1f}%"
 
     return {
         "last_run_status": str(view.get("last_run_status", "no-data")),
