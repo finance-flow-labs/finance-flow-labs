@@ -56,8 +56,13 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         elif isinstance(value, (int, float)):
             raw = float(value)
         elif isinstance(value, str):
+            normalized = value.strip().replace(",", "")
+            scale = 1.0
+            if normalized.endswith("%"):
+                normalized = normalized[:-1].strip()
+                scale = 0.01
             try:
-                raw = float(value)
+                raw = float(normalized) * scale
             except ValueError:
                 return _metric("n/a", status="error", reason="invalid_numeric")
         else:
