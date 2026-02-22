@@ -16,3 +16,8 @@ Primary deployment entrypoint is `streamlit_app.py` and now supports two explici
 
 If `STREAMLIT_PUBLIC_URL` env is configured, both views render the same access health banner using `check_streamlit_access`.
 This keeps auth-wall/degraded signals visible regardless of active view.
+
+## Deploy/CI smoke coverage
+
+- `scripts/post_deploy_verify.sh` now checks three routes: default landing, `?view=enduser`, `?view=operator`.
+- `scripts/deploy_access_gate_ci.sh` enforces deploy-access gate on the same three routes and fails CI if any route regresses to auth-wall/degraded blocker state.
