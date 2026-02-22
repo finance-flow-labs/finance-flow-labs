@@ -399,7 +399,7 @@ def _extract_edgar_metrics(us_gaap: dict[str, Any]) -> list[dict[str, Any]]:
 # Financial Modeling Prep (FMP)
 # ---------------------------------------------------------------------------
 
-_FMP_BASE = "https://financialmodelingprep.com/api"
+_FMP_BASE = "https://financialmodelingprep.com"
 
 
 class FmpStockClient:
@@ -454,13 +454,14 @@ class FmpStockClient:
         """Return valuation-oriented snapshot for a company/ticker.
 
         Output fields:
-        - companies: search candidates from FMP
+        - companies: search candidates from FMP stable endpoints
         - symbol: resolved symbol used for downstream endpoints
         - quote: latest quote row (price/market cap/ratios, etc.)
         - key_metrics: valuation and profitability metric rows
         - analyst_estimates: consensus estimate rows
-        - price_target_consensus: v4 consensus summary
-        - price_targets: recent price target entries
+        - price_target_consensus: consensus target summary
+        - price_target_summary: target history aggregate summary
+        - price_targets: compatibility alias (list form of summary rows)
         - errors: non-fatal endpoint errors (missing plan/forbidden/etc.)
         """
         query_clean = query.strip()
@@ -469,13 +470,23 @@ class FmpStockClient:
 
         errors: list[str] = []
 
+        # Stable API migration (legacy /api/v3, /api/v4 endpoints are restricted)
         companies_raw = self._safe_get(
             errors,
-            "search",
-            "/v3/search",
-            {"query": query_clean, "limit": "10"},
+            "search_symbol",
+            "/stable/search-symbol",
+            {"query": query_clean},
             [],
         )
+        if not isinstance(companies_raw, list) or not companies_raw:
+            companies_raw = self._safe_get(
+                errors,
+                "search_name",
+                "/stable/search-name",
+                {"query": query_clean},
+                [],
+            )
+
         companies: list[dict[str, Any]] = []
         if isinstance(companies_raw, list):
             for row in companies_raw:
@@ -485,22 +496,33 @@ class FmpStockClient:
                     {
                         "symbol": row.get("symbol", ""),
                         "name": row.get("name", ""),
-                        "exchange": row.get("exchangeShortName", row.get("exchange", "")),
+                        "exchange": row.get("exchange", row.get("exchangeShortName", "")),
+                        "exchange_full_name": row.get("exchangeFullName", ""),
                         "type": row.get("type", ""),
+                        "currency": row.get("currency", ""),
                     }
                 )
 
         resolved_symbol = query_clean.upper()
         if companies:
-            best = companies[0].get("symbol")
+            exact = next(
+                (
+                    c.get("symbol", "")
+                    for c in companies
+                    if isinstance(c.get("symbol", ""), str)
+                    and c.get("symbol", "").upper() == query_clean.upper()
+                ),
+                "",
+            )
+            best = exact or companies[0].get("symbol", "")
             if isinstance(best, str) and best:
                 resolved_symbol = best.upper()
 
         quote_rows = self._safe_get(
             errors,
             "quote",
-            f"/v3/quote/{urllib.parse.quote(resolved_symbol)}",
-            {},
+            "/stable/quote",
+            {"symbol": resolved_symbol},
             [],
         )
         quote: dict[str, Any] = quote_rows[0] if isinstance(quote_rows, list) and quote_rows else {}
@@ -508,17 +530,18 @@ class FmpStockClient:
         key_metrics_raw = self._safe_get(
             errors,
             "key_metrics",
-            f"/v3/key-metrics/{urllib.parse.quote(resolved_symbol)}",
-            {"limit": str(limit)},
+            "/stable/key-metrics",
+            {"symbol": resolved_symbol},
             [],
         )
-        key_metrics = key_metrics_raw if isinstance(key_metrics_raw, list) else []
+        key_metrics_all = key_metrics_raw if isinstance(key_metrics_raw, list) else []
+        key_metrics = key_metrics_all[:limit]
 
         estimates_raw = self._safe_get(
             errors,
             "analyst_estimates",
-            f"/v3/analyst-estimates/{urllib.parse.quote(resolved_symbol)}",
-            {"limit": str(limit)},
+            "/stable/analyst-estimates",
+            {"symbol": resolved_symbol, "period": "annual", "page": "0", "limit": str(limit)},
             [],
         )
         analyst_estimates = estimates_raw if isinstance(estimates_raw, list) else []
@@ -526,7 +549,7 @@ class FmpStockClient:
         pt_consensus_raw = self._safe_get(
             errors,
             "price_target_consensus",
-            "/v4/price-target-consensus",
+            "/stable/price-target-consensus",
             {"symbol": resolved_symbol},
             [],
         )
@@ -536,23 +559,31 @@ class FmpStockClient:
             if isinstance(first, dict):
                 price_target_consensus = first
 
-        price_targets_raw = self._safe_get(
+        pt_summary_raw = self._safe_get(
             errors,
-            "price_targets",
-            "/v4/price-target",
-            {"symbol": resolved_symbol, "limit": str(limit)},
+            "price_target_summary",
+            "/stable/price-target-summary",
+            {"symbol": resolved_symbol},
             [],
         )
-        price_targets = price_targets_raw if isinstance(price_targets_raw, list) else []
+        price_target_summary: dict[str, Any] = {}
+        if isinstance(pt_summary_raw, list) and pt_summary_raw:
+            first = pt_summary_raw[0]
+            if isinstance(first, dict):
+                price_target_summary = first
+
+        price_targets = pt_summary_raw if isinstance(pt_summary_raw, list) else []
 
         return {
             "query": query_clean,
             "symbol": resolved_symbol,
+            "endpoint_family": "stable",
             "companies": companies,
             "quote": quote,
             "key_metrics": key_metrics,
             "analyst_estimates": analyst_estimates,
             "price_target_consensus": price_target_consensus,
+            "price_target_summary": price_target_summary,
             "price_targets": price_targets,
             "errors": errors,
         }
