@@ -41,6 +41,13 @@ class FakeDashboardRepo:
             },
         ]
 
+    def read_forecast_error_attributions(self, horizon="1M", limit=200):
+        return [
+            {"category": "macro_miss", "evidence_hard": [{"source": "FRED"}], "evidence_soft": [{"note": "regime"}]},
+            {"category": "macro_miss", "evidence_hard": [{"source": "ECOS"}], "evidence_soft": []},
+            {"category": "valuation_miss", "evidence_hard": [], "evidence_soft": [{"note": "narrative"}]},
+        ]
+
 
 def test_dashboard_service_builds_operator_view_model():
     view = build_dashboard_view(FakeDashboardRepo())
@@ -55,4 +62,6 @@ def test_dashboard_service_builds_operator_view_model():
     assert view["attribution_summary"]["top_count"] == 2
     assert len(view["attribution_summary"]["top_categories"]) == 2
     assert view["attribution_summary"]["top_categories"][0]["mean_abs_contribution"] == 0.021
+    assert view["attribution_summary"]["hard_evidence_coverage"] == 2 / 3
+    assert view["attribution_summary"]["soft_evidence_coverage"] == 2 / 3
     assert len(view["recent_runs"]) == 2

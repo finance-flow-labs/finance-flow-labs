@@ -44,14 +44,20 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         attribution_total = to_int(attribution_summary.get("total", 0))
         top_category = str(attribution_summary.get("top_category", "n/a"))
         top_count = to_int(attribution_summary.get("top_count", 0))
+        hard_evidence_coverage = attribution_summary.get("hard_evidence_coverage")
+        soft_evidence_coverage = attribution_summary.get("soft_evidence_coverage")
     else:
         attribution_total = 0
         top_category = "n/a"
         top_count = 0
+        hard_evidence_coverage = None
+        soft_evidence_coverage = None
 
     coverage_pct = "n/a" if not isinstance(realization_coverage, (int, float)) else f"{realization_coverage * 100:.1f}%"
     hit_rate_pct = "n/a" if not isinstance(hit_rate, (int, float)) else f"{hit_rate * 100:.1f}%"
     mae_pct = "n/a" if not isinstance(mae, (int, float)) else f"{mae * 100:.2f}%"
+    hard_evidence_pct = "n/a" if not isinstance(hard_evidence_coverage, (int, float)) else f"{hard_evidence_coverage * 100:.1f}%"
+    soft_evidence_pct = "n/a" if not isinstance(soft_evidence_coverage, (int, float)) else f"{soft_evidence_coverage * 100:.1f}%"
 
     return {
         "last_run_status": str(view.get("last_run_status", "no-data")),
@@ -67,6 +73,8 @@ def build_operator_cards(view: Mapping[str, object]) -> dict[str, object]:
         "attribution_total": attribution_total,
         "attribution_top_category": top_category,
         "attribution_top_count": top_count,
+        "hard_evidence_pct": hard_evidence_pct,
+        "soft_evidence_pct": soft_evidence_pct,
     }
 
 
@@ -88,7 +96,7 @@ def run_streamlit_app(dsn: str) -> None:
     st.title("Ingestion Operator Dashboard")
     st.caption("Manual update monitoring (cron separated)")
 
-    c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11 = st.columns(11)
+    c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13 = st.columns(13)
     c1.metric("Last Status", cards["last_run_status"], cards["last_run_time"])
     c2.metric("Raw", cards["raw_events"])
     c3.metric("Canonical", cards["canonical_events"])
@@ -100,6 +108,8 @@ def run_streamlit_app(dsn: str) -> None:
     c9.metric("1M MAE", cards["mae_pct"])
     c10.metric("1M Attr", cards["attribution_total"])
     c11.metric("Top Attr", cards["attribution_top_category"], cards["attribution_top_count"])
+    c12.metric("HARD Evd", cards["hard_evidence_pct"])
+    c13.metric("SOFT Evd", cards["soft_evidence_pct"])
 
     recent_runs = view.get("recent_runs", [])
     if isinstance(recent_runs, list) and recent_runs:
