@@ -208,3 +208,77 @@ def test_postgres_repository_raises_when_forecast_missing_for_realization_write(
         assert "forecast_id not found" in str(exc)
     else:
         raise AssertionError("Expected ValueError for missing forecast_id")
+
+
+def test_postgres_repository_reads_expected_vs_realized_with_evidence_fields():
+    cursor = FakeCursor(
+        fetch_rows=[
+            (
+                7,
+                "1M",
+                "2026-02-22T00:00:00+00:00",
+                0.02,
+                0.08,
+                0.2,
+                0.12,
+                0.7,
+                [{"driver": "macro:disinflation"}],
+                [{"source": "fred", "metric": "CPI"}],
+                [{"source": "news", "note": "tone improved"}],
+                99,
+                0.05,
+                0.18,
+                0.09,
+                True,
+                0.0,
+                "2026-03-22T00:00:00+00:00",
+                "thesis-1",
+                "stock",
+                "AAPL",
+                "AI capex cycle persists",
+                "Cloud demand supports overweight.",
+                [{"source": "sec", "metric": "revenue_growth"}],
+                [{"source": "news", "note": "management tone improved"}],
+            )
+        ],
+        columns=[
+            "forecast_id",
+            "horizon",
+            "as_of",
+            "expected_return_low",
+            "expected_return_high",
+            "expected_volatility",
+            "expected_drawdown",
+            "confidence",
+            "key_drivers",
+            "forecast_evidence_hard",
+            "forecast_evidence_soft",
+            "realization_id",
+            "realized_return",
+            "realized_volatility",
+            "max_drawdown",
+            "hit",
+            "forecast_error",
+            "evaluated_at",
+            "thesis_id",
+            "scope_level",
+            "target_id",
+            "title",
+            "summary",
+            "thesis_evidence_hard",
+            "thesis_evidence_soft",
+        ],
+    )
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    rows = repo.read_expected_vs_realized(horizon="1M", limit=25)
+
+    sql, params = cursor.executed[0]
+    assert "FROM forecast_records fr" in sql
+    assert "LEFT JOIN realization_records rr ON rr.forecast_id = fr.id" in sql
+    assert params == ("1M", 25)
+    assert rows[0]["forecast_id"] == 7
+    assert rows[0]["realization_id"] == 99
+    assert rows[0]["forecast_evidence_hard"][0]["source"] == "fred"
+    assert rows[0]["thesis_evidence_soft"][0]["source"] == "news"
