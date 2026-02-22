@@ -210,6 +210,72 @@ def test_postgres_repository_raises_when_forecast_missing_for_realization_write(
         raise AssertionError("Expected ValueError for missing forecast_id")
 
 
+def test_postgres_repository_reads_forecast_error_attributions_with_hard_soft_evidence():
+    cursor = FakeCursor(
+        fetch_rows=[
+            (
+                501,
+                99,
+                "macro_miss",
+                -0.03,
+                "inflation re-acceleration",
+                [{"source": "fred", "metric": "CPI"}],
+                [{"source": "analyst", "note": "policy surprise"}],
+                "2026-03-22T00:05:00+00:00",
+                7,
+                0.01,
+                -0.04,
+                False,
+                "2026-03-22T00:00:00+00:00",
+                "1M",
+                "thesis-1",
+                "2026-02-22T00:00:00+00:00",
+                0.02,
+                0.08,
+                "stock",
+                "AAPL",
+                "AI capex cycle persists",
+            )
+        ],
+        columns=[
+            "attribution_id",
+            "realization_id",
+            "category",
+            "contribution",
+            "note",
+            "evidence_hard",
+            "evidence_soft",
+            "created_at",
+            "forecast_id",
+            "realized_return",
+            "forecast_error",
+            "hit",
+            "evaluated_at",
+            "horizon",
+            "thesis_id",
+            "as_of",
+            "expected_return_low",
+            "expected_return_high",
+            "scope_level",
+            "target_id",
+            "title",
+        ],
+    )
+    conn = FakeConnection(cursor)
+    repo = PostgresRepository(connection_factory=lambda: conn)
+
+    rows = repo.read_forecast_error_attributions(horizon="1M", limit=30)
+
+    sql, params = cursor.executed[0]
+    assert "FROM forecast_error_attributions fea" in sql
+    assert "JOIN realization_records rr ON rr.id = fea.realization_id" in sql
+    assert params == ("1M", 30)
+    assert rows[0]["attribution_id"] == 501
+    assert rows[0]["category"] == "macro_miss"
+    assert rows[0]["evidence_hard"][0]["source"] == "fred"
+    assert rows[0]["evidence_soft"][0]["source"] == "analyst"
+
+
 def test_postgres_repository_reads_expected_vs_realized_with_evidence_fields():
     cursor = FakeCursor(
         fetch_rows=[
