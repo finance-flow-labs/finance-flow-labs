@@ -280,6 +280,25 @@ def test_dashboard_service_policy_compliance_marks_stale_benchmark_dependencies_
     assert benchmark_check["evidence"]["series_age_days"]["QQQ"] >= 17
 
 
+def test_dashboard_service_policy_compliance_marks_benchmark_stale_at_threshold(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("POLICY_CHECK_BENCHMARK_MAX_STALE_DAYS", "7")
+
+    class BoundaryStaleBenchmarkRepo(FakeDashboardRepo):
+        def read_latest_runs(self, limit=20):
+            rows = super().read_latest_runs(limit)
+            rows[0]["created_at"] = "2026-02-18T00:00:00Z"
+            return rows
+
+        def read_macro_series_points(self, metric_key, limit=1):
+            return [{"metric_key": metric_key, "as_of": "2026-02-11T00:00:00Z", "value": 1.0}]
+
+    view = build_dashboard_view(BoundaryStaleBenchmarkRepo())
+    benchmark_check = view["policy_compliance"]["checks"][7]
+    assert benchmark_check["status"] == "WARN"
+    assert "Stale benchmark series (>=7d)" in benchmark_check["reason"]
+    assert benchmark_check["evidence"]["series_age_days"]["QQQ"] == 7
+
+
 def test_dashboard_service_policy_checks_include_as_of_from_latest_run_when_direct_evidence_missing():
     view = build_dashboard_view(FakeDashboardRepo())
     checks = view["policy_compliance"]["checks"]

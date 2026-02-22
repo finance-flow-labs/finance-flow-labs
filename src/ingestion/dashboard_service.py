@@ -429,7 +429,7 @@ def _build_policy_compliance(
                 continue
             age_days = max(0, int((latest_run_dt - as_of_dt).total_seconds() // 86400))
             stale_age_days[key] = age_days
-            if age_days > max_stale_days:
+            if age_days >= max_stale_days:
                 stale_keys.append(key)
 
     if missing_keys:
@@ -438,7 +438,7 @@ def _build_policy_compliance(
     elif stale_keys:
         benchmark_status = "WARN"
         benchmark_reason = (
-            f"Stale benchmark series (>{max_stale_days}d): {', '.join(sorted(stale_keys))}"
+            f"Stale benchmark series (>={max_stale_days}d): {', '.join(sorted(stale_keys))}"
         )
     else:
         benchmark_status = "PASS"
