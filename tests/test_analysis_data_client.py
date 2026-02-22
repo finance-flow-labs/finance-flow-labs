@@ -7,6 +7,8 @@ def test_canonical_data_client_falls_back_without_db(
 ) -> None:
     monkeypatch.delenv("SUPABASE_DB_URL", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("FRED_API_KEY", raising=False)
+    monkeypatch.delenv("ECOS_API_KEY", raising=False)
 
     client = CanonicalDataClient()
     rows = client.read_series("fred", "CPIAUCSL", limit=5)
