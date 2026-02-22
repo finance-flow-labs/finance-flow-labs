@@ -1,12 +1,14 @@
 import json
 import os
 from collections import Counter
+from datetime import datetime, timezone
 from typing import Protocol
 
 
 REQUIRED_LEARNING_HORIZONS: tuple[str, ...] = ("1W", "1M", "3M")
 DEFAULT_MIN_REALIZED_BY_HORIZON: dict[str, int] = {"1W": 8, "1M": 12, "3M": 6}
 DEFAULT_COVERAGE_FLOOR: float = 0.4
+DEFAULT_BENCHMARK_MAX_STALE_DAYS: int = 7
 POLICY_CHECK_BENCHMARK_KEYS: tuple[str, ...] = ("QQQ", "KOSPI200", "BTC", "SGOV")
 POLICY_LOCK_REFERENCE = "docs/POLICY_LOCK_V1.md"
 
@@ -118,6 +120,21 @@ def _safe_repo_call(default: object, fn: object, *args: object, **kwargs: object
         return fn(*args, **kwargs)
     except Exception:
         return default
+
+
+def _parse_iso_utc(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    trimmed = value.strip()
+    if not trimmed:
+        return None
+    try:
+        parsed = datetime.fromisoformat(trimmed.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _default_learning_metrics(horizon: str) -> dict[str, object]:
@@ -323,9 +340,28 @@ def _build_policy_compliance(
         benchmark_as_of = {key: None for key in POLICY_CHECK_BENCHMARK_KEYS}
 
     missing_keys = [key for key, count in benchmark_points.items() if count == 0]
+    max_stale_days = _int_env("POLICY_CHECK_BENCHMARK_MAX_STALE_DAYS", DEFAULT_BENCHMARK_MAX_STALE_DAYS)
+    latest_run_dt = _parse_iso_utc(latest_run_time)
+    stale_keys: list[str] = []
+    stale_age_days: dict[str, int] = {}
+    if latest_run_dt is not None:
+        for key, as_of in benchmark_as_of.items():
+            as_of_dt = _parse_iso_utc(as_of)
+            if as_of_dt is None:
+                continue
+            age_days = max(0, int((latest_run_dt - as_of_dt).total_seconds() // 86400))
+            stale_age_days[key] = age_days
+            if age_days > max_stale_days:
+                stale_keys.append(key)
+
     if missing_keys:
         benchmark_status = "WARN"
         benchmark_reason = f"Missing benchmark series: {', '.join(missing_keys)}"
+    elif stale_keys:
+        benchmark_status = "WARN"
+        benchmark_reason = (
+            f"Stale benchmark series (>{max_stale_days}d): {', '.join(sorted(stale_keys))}"
+        )
     else:
         benchmark_status = "PASS"
         benchmark_reason = "All benchmark components have recent points."
@@ -339,6 +375,8 @@ def _build_policy_compliance(
             "evidence": {
                 "series_point_count": benchmark_points,
                 "series_latest_as_of": benchmark_as_of,
+                "series_age_days": stale_age_days,
+                "max_stale_days": max_stale_days,
             },
         }
     )
