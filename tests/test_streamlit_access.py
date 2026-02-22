@@ -162,7 +162,7 @@ def test_check_streamlit_access_does_not_retry_auth_wall_failures():
     assert result.reason == "auth_wall_redirect_detected"
 
 
-def test_access_check_result_serializes_alert_fields():
+def test_access_check_result_serializes_alert_fields_with_remediation_hint():
     result = streamlit_access.AccessCheckResult(
         ok=False,
         status_code=303,
@@ -175,3 +175,21 @@ def test_access_check_result_serializes_alert_fields():
 
     assert payload["alert"] is True
     assert payload["alert_severity"] == "critical"
+    assert isinstance(payload["remediation_hint"], str)
+    assert "auth_wall_detected" in payload["remediation_hint"]
+
+
+def test_access_check_result_success_has_no_remediation_hint():
+    result = streamlit_access.AccessCheckResult(
+        ok=True,
+        status_code=200,
+        final_url="https://finance-flow-labs.streamlit.app/",
+        auth_wall_redirect=False,
+        reason="ok",
+    )
+
+    payload = result.to_dict()
+
+    assert payload["alert"] is False
+    assert payload["alert_severity"] == "none"
+    assert payload["remediation_hint"] is None
