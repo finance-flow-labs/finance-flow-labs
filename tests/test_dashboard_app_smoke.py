@@ -212,6 +212,14 @@ def test_dashboard_app_keeps_true_zero_values_as_ok_not_unknown():
     assert cards["metric_status"]["coverage_pct"]["status"] == "ok"
 
 
+def test_dashboard_app_flags_missing_horizon_block_as_critical_alert():
+    cards = dashboard_app.build_operator_cards({"learning_metrics_by_horizon": None})
+
+    assert len(cards["learning_metrics_panel"]) == 3
+    assert all(row["status"] == "unknown" for row in cards["learning_metrics_panel"])
+    assert cards["has_critical_metric_alert"] is True
+
+
 def test_dashboard_app_flags_primary_horizon_reliability_guardrail():
     cards = dashboard_app.build_operator_cards(
         {
