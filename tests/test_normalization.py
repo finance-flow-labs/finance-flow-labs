@@ -23,6 +23,7 @@ def test_normalize_fred_payload_maps_observations_sorted():
     assert len(points) == 2
     assert [p.value for p in points] == [3.1, 3.2]
     assert points[0].metric_key == "CPIAUCSL"
+    assert all(p.evidence_tier == "HARD" for p in points)
 
 
 def test_normalize_ecos_payload_skips_malformed_rows():
