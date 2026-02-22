@@ -1,5 +1,9 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
+
+
+EvidenceTier = Literal["HARD", "SOFT"]
 
 
 @dataclass(frozen=True)
@@ -11,3 +15,4 @@ class NormalizedSeriesPoint:
     available_at: datetime
     value: float
     lineage_id: str
+    evidence_tier: EvidenceTier = "HARD"
