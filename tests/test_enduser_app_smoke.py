@@ -60,6 +60,7 @@ def test_run_enduser_app_renders_portfolio_and_signals_tabs(monkeypatch):
 
     monkeypatch.setitem(__import__("sys").modules, "streamlit", fake_streamlit)
     app = importlib.import_module("src.enduser.app")
+    monkeypatch.setattr(app, "_render_portfolio_tab", lambda _st, dsn: calls.setdefault("portfolio_dsn", dsn))
     monkeypatch.setattr(
         app,
         "read_latest_macro_regime_signal",
@@ -76,8 +77,9 @@ def test_run_enduser_app_renders_portfolio_and_signals_tabs(monkeypatch):
     app.run_enduser_app("postgres://example")
 
     assert calls["tabs"] == ["Portfolio", "Signals"]
+    assert calls["portfolio_dsn"] == "postgres://example"
     assert calls["subheader"] == ["Macro regime signal"]
-    assert calls["info"] == ["Coming soon", "More signal cards coming soon"]
+    assert calls["info"] == ["More signal cards coming soon"]
 
 
 def test_run_enduser_app_wires_reader_payload_into_signal_card(monkeypatch):
@@ -116,6 +118,7 @@ def test_run_enduser_app_wires_reader_payload_into_signal_card(monkeypatch):
         calls["render_payload"] = regime_signal
         calls["render_dsn"] = dsn
 
+    monkeypatch.setattr(app, "_render_portfolio_tab", lambda _st, _dsn: None)
     monkeypatch.setattr(app, "read_latest_macro_regime_signal", _fake_reader)
     monkeypatch.setattr(app, "render_macro_regime_card", _fake_render)
 
@@ -124,6 +127,72 @@ def test_run_enduser_app_wires_reader_payload_into_signal_card(monkeypatch):
     assert calls["reader_dsn"] == "postgres://macro-signal"
     assert calls["render_payload"] == expected_payload
     assert calls["render_dsn"] == "postgres://macro-signal"
+
+
+def test_render_portfolio_tab_shows_empty_info_when_no_snapshot(monkeypatch):
+    calls: dict[str, object] = {"info": [], "line_chart": []}
+
+    class _Column:
+        def metric(self, label: str, value: str):
+            calls.setdefault("metrics", []).append((label, value))
+
+    fake_streamlit = types.SimpleNamespace(
+        info=lambda text: calls["info"].append(text),
+        warning=lambda text: calls.setdefault("warning", []).append(text),
+        columns=lambda count: [_Column() for _ in range(count)],
+        line_chart=lambda *args, **kwargs: calls["line_chart"].append((args, kwargs)),
+    )
+
+    app = importlib.import_module("src.enduser.app")
+    monkeypatch.setattr(app, "PostgresRepository", lambda dsn: object())
+    monkeypatch.setattr(app, "build_performance_view", lambda _repo: {"nav_series": []})
+
+    app._render_portfolio_tab(fake_streamlit, "postgres://example")
+
+    assert calls["info"] == ["포트폴리오 스냅샷이 없습니다."]
+    assert calls["line_chart"] == []
+
+
+def test_render_portfolio_tab_renders_metrics_and_line_chart(monkeypatch):
+    calls: dict[str, object] = {"metrics": [], "line_chart": []}
+
+    class _Column:
+        def metric(self, label: str, value: str):
+            calls["metrics"].append((label, value))
+
+    fake_streamlit = types.SimpleNamespace(
+        info=lambda text: calls.setdefault("info", []).append(text),
+        warning=lambda text: calls.setdefault("warning", []).append(text),
+        columns=lambda count: [_Column() for _ in range(count)],
+        line_chart=lambda *args, **kwargs: calls["line_chart"].append((args, kwargs)),
+    )
+
+    performance_payload = {
+        "total_return_pct": 12.34,
+        "mdd_pct": -8.5,
+        "sharpe_ratio": 1.23,
+        "alpha_pct": 2.5,
+        "mdd_alert": True,
+        "mdd_alert_threshold_pct": -20,
+        "nav_series": [
+            {"as_of": "2026-01-01", "nav": 1000},
+            {"as_of": "2026-01-02", "nav": 1100},
+        ],
+        "benchmark_series": [
+            {"as_of": "2026-01-02", "benchmark_nav": 1.02},
+        ],
+    }
+
+    app = importlib.import_module("src.enduser.app")
+    monkeypatch.setattr(app, "PostgresRepository", lambda dsn: object())
+    monkeypatch.setattr(app, "build_performance_view", lambda _repo: performance_payload)
+
+    app._render_portfolio_tab(fake_streamlit, "postgres://example")
+
+    labels = [label for label, _ in calls["metrics"]]
+    assert labels == ["총수익률", "MDD", "Sharpe", "알파(vs 벤치마크)"]
+    assert calls["line_chart"], "expected line_chart call"
+    assert calls.get("warning"), "expected mdd alert warning"
 
 
 def test_enduser_entrypoint_requires_database_url(monkeypatch):
