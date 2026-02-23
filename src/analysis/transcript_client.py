@@ -3,8 +3,22 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
+import requests
 from youtube_transcript_api import YouTubeTranscriptApi
+
+
+class _TimeoutSession(requests.Session):
+    """requests.Session wrapper that enforces a default per-request timeout."""
+
+    def __init__(self, request_timeout_seconds: float) -> None:
+        super().__init__()
+        self._request_timeout_seconds = request_timeout_seconds
+
+    def request(self, method: str, url: str, **kwargs: Any):  # type: ignore[override]
+        kwargs.setdefault("timeout", self._request_timeout_seconds)
+        return super().request(method, url, **kwargs)
 
 
 def extract_video_id(url: str) -> str:
@@ -37,6 +51,14 @@ def extract_video_id(url: str) -> str:
 class TranscriptClient:
     """Fetches transcripts for individual YouTube videos."""
 
+    def __init__(self, request_timeout_seconds: float = 10.0) -> None:
+        if request_timeout_seconds <= 0:
+            raise ValueError("request_timeout_seconds must be > 0")
+
+        self._api = YouTubeTranscriptApi(
+            http_client=_TimeoutSession(request_timeout_seconds=request_timeout_seconds)
+        )
+
     def fetch(self, url: str, language: str = "ko") -> dict[str, object]:
         """Return the transcript for *url*.
 
@@ -55,12 +77,11 @@ class TranscriptClient:
         video_id = extract_video_id(url)
 
         fallback = "en" if language == "ko" else "ko"
-        api = YouTubeTranscriptApi()
         try:
-            fetched = api.fetch(video_id, languages=[language, fallback])
+            fetched = self._api.fetch(video_id, languages=[language, fallback])
             used_language = language
         except Exception:
-            fetched = api.fetch(video_id)
+            fetched = self._api.fetch(video_id)
             used_language = "auto"
 
         transcript_text = " ".join(entry.text for entry in fetched)
