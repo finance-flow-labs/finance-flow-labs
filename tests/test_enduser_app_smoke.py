@@ -153,8 +153,8 @@ def test_render_portfolio_tab_shows_empty_info_when_no_snapshot(monkeypatch):
     assert calls["line_chart"] == []
 
 
-def test_render_portfolio_tab_renders_metrics_and_line_chart(monkeypatch):
-    calls: dict[str, object] = {"metrics": [], "line_chart": []}
+def test_render_portfolio_tab_renders_metrics_chart_allocation_and_leverage(monkeypatch):
+    calls: dict[str, object] = {"metrics": [], "line_chart": [], "bar_chart": []}
 
     class _Column:
         def metric(self, label: str, value: str):
@@ -163,17 +163,28 @@ def test_render_portfolio_tab_renders_metrics_and_line_chart(monkeypatch):
     fake_streamlit = types.SimpleNamespace(
         info=lambda text: calls.setdefault("info", []).append(text),
         warning=lambda text: calls.setdefault("warning", []).append(text),
+        caption=lambda text: calls.setdefault("caption", []).append(text),
+        subheader=lambda text: calls.setdefault("subheader", []).append(text),
         columns=lambda count: [_Column() for _ in range(count)],
         line_chart=lambda *args, **kwargs: calls["line_chart"].append((args, kwargs)),
+        bar_chart=lambda *args, **kwargs: calls["bar_chart"].append((args, kwargs)),
     )
 
     performance_payload = {
         "total_return_pct": 12.34,
-        "mdd_pct": -8.5,
+        "mdd_pct": -21.0,
         "sharpe_ratio": 1.23,
         "alpha_pct": 2.5,
         "mdd_alert": True,
-        "mdd_alert_threshold_pct": -20,
+        "policy_mdd_limit_pct": -30.0,
+        "mdd_policy_buffer_pp": 9.0,
+        "us_weight_pct": 45.0,
+        "kr_weight_pct": 25.0,
+        "crypto_weight_pct": 20.0,
+        "other_weight_pct": 10.0,
+        "leverage_weight_pct": 25.0,
+        "leverage_cap_pct": 20.0,
+        "leverage_cap_breached": True,
         "nav_series": [
             {"as_of": "2026-01-01", "nav": 1000},
             {"as_of": "2026-01-02", "nav": 1100},
@@ -192,7 +203,11 @@ def test_render_portfolio_tab_renders_metrics_and_line_chart(monkeypatch):
     labels = [label for label, _ in calls["metrics"]]
     assert labels == ["총수익률", "MDD", "Sharpe", "알파(vs 벤치마크)"]
     assert calls["line_chart"], "expected line_chart call"
-    assert calls.get("warning"), "expected mdd alert warning"
+    assert calls["bar_chart"], "expected allocation chart"
+    assert "자산 배분" in calls.get("subheader", [])
+    warnings = calls.get("warning", [])
+    assert any("MDD" in text for text in warnings)
+    assert any("레버리지 슬리브" in text for text in warnings)
 
 
 def test_enduser_entrypoint_requires_database_url(monkeypatch):

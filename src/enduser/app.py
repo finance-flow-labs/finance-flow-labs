@@ -26,6 +26,15 @@ def _format_ratio(value: object, precision: int = 2) -> str:
         return "n/a"
 
 
+def _format_pp(value: object, precision: int = 2) -> str:
+    try:
+        if value is None:
+            return "n/a"
+        return f"{float(value):.{precision}f}%p"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
 def _render_portfolio_tab(st: object, dsn: str) -> None:
     repository = PostgresRepository(dsn=dsn)
     performance = build_performance_view(repository)
@@ -47,11 +56,17 @@ def _render_portfolio_tab(st: object, dsn: str) -> None:
     c4.metric("알파(vs 벤치마크)", _format_pct(alpha_pct))
 
     if bool(performance.get("mdd_alert")):
-        threshold = performance.get("mdd_alert_threshold_pct")
-        st.warning(
-            "MDD 경보: 하락폭이 경보 임계치에 접근/도달했습니다 "
-            f"(threshold={_format_pct(threshold)})."
-        )
+        policy_limit_pct = performance.get("policy_mdd_limit_pct")
+        mdd_policy_buffer_pp = performance.get("mdd_policy_buffer_pp")
+        if mdd_policy_buffer_pp is not None and float(mdd_policy_buffer_pp) > 0:
+            st.warning(
+                f"⚠️ MDD {_format_pct(mdd_pct)} — 정책 한계({_format_pct(policy_limit_pct)})까지 "
+                f"{_format_pp(mdd_policy_buffer_pp)} 남음"
+            )
+        else:
+            st.warning(
+                f"⚠️ MDD {_format_pct(mdd_pct)} — 정책 한계({_format_pct(policy_limit_pct)})를 초과했습니다"
+            )
 
     benchmark_series = performance.get("benchmark_series", [])
     benchmark_map: dict[str, float] = {}
@@ -96,6 +111,33 @@ def _render_portfolio_tab(st: object, dsn: str) -> None:
             x="as_of",
             y=["portfolio_nav_index", "benchmark_nav_index"],
         )
+
+    allocation_pairs = [
+        ("US", performance.get("us_weight_pct")),
+        ("KR", performance.get("kr_weight_pct")),
+        ("Crypto", performance.get("crypto_weight_pct")),
+        ("기타", performance.get("other_weight_pct")),
+    ]
+    allocation_chart = {
+        label: [float(weight)]
+        for label, weight in allocation_pairs
+        if weight is not None
+    }
+    if allocation_chart:
+        st.subheader("자산 배분")
+        st.bar_chart(allocation_chart)
+        st.caption("정책 목표 가이드: US ~45% · KR ~25% · Crypto ~20%")
+
+    leverage_weight_pct = performance.get("leverage_weight_pct")
+    leverage_cap_pct = performance.get("leverage_cap_pct")
+    if leverage_weight_pct is not None and leverage_cap_pct is not None:
+        leverage_message = (
+            f"레버리지 슬리브: {_format_pct(leverage_weight_pct)} / {_format_pct(leverage_cap_pct)} 상한"
+        )
+        if bool(performance.get("leverage_cap_breached")):
+            st.warning(f"⚠️ {leverage_message}")
+        else:
+            st.caption(leverage_message)
 
 
 def run_enduser_app(dsn: str, *, configure_page: bool = True) -> None:
