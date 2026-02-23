@@ -1,6 +1,6 @@
 ---
 name: stock-analysis
-description: 개별 주식 멀티에이전트 토론 분석. Bull/Bear/Fundamental/Value/Growth/Risk 서브에이전트 병렬 실행 후 Critic 순차 실행, 수렴 인사이트 제공. 한국(DART) 및 미국(SEC EDGAR) 모두 지원.
+description: 개별 주식 멀티에이전트 토론 분석. Bull/Bear/Fundamental/Value/Growth/Risk 서브에이전트 병렬 실행 후 Critic 순차 실행, 수렴 인사이트 제공. 한국(DART) 및 미국(SEC EDGAR) 모두 지원하며 무료 공개 데이터(공시/IR/공공기관) 우선 수집.
 ---
 
 ## 개별 주식 멀티에이전트 분석 실행 순서
@@ -9,6 +9,14 @@ description: 개별 주식 멀티에이전트 토론 분석. Bull/Bear/Fundament
 
 > **기본 동작**: 종목명/티커가 포함된 자유 텍스트 입력을 지원합니다. ("삼성전자 분석해줘", "Analyze Apple", "TSMC 어때?")
 > **시장 자동 감지**: 한국어 종목명 또는 `.KS`/`.KQ` 티커 → DART(KR), 영문 티커 → SEC EDGAR(US)
+
+### 무료 공개 데이터 우선 원칙 (필수)
+
+- **항상 무료/공개 데이터부터 수집**하라: DART(한국), SEC EDGAR(미국), 회사 IR 페이지, 공공기관(CMS/FRED/ECOS).
+- API 키가 필요한 소스(FMP 등)는 **선택 보강용**으로만 사용하라.
+- 유료/키 기반 소스가 실패하거나 미설정이어도 분석을 중단하지 말고,
+  무료 소스 기반으로 끝까지 수행한 뒤 부족 항목만 `Needs Data`로 명시하라.
+- 결과 본문과 데이터 출처 섹션에서 **무료 근거 vs 선택 보강 근거**를 구분하라.
 
 ---
 
@@ -28,23 +36,25 @@ python3 -m src.analysis.cli stock edgar "Apple"
 
 검색 결과에서 회사명, 티커, corp_code(KR) 또는 CIK(US)를 확인하라.
 
-#### 1-2. 재무제표/밸류에이션 수집
+#### 1-2. 재무제표/밸류에이션 수집 (무료 기본 + 선택 보강)
 
 ```bash
 # 한국: 최근 2개년 재무제표 (corp_code 또는 티커)
+# 필요 ENV: OPEN_DART_API_KEY (무료 발급)
 python3 -m src.analysis.cli stock dart "005930" --year 2024
 python3 -m src.analysis.cli stock dart "005930" --year 2023
 
-# 미국: XBRL company facts (티커 또는 CIK)
+# 미국(무료 기본): SEC EDGAR company facts + 최근 10-K/10-Q
 python3 -m src.analysis.cli stock edgar "AAPL"
 
-# 미국(선택): 주가/멀티플/컨센서스(FMP)
+# 미국(선택 보강): 주가/멀티플/컨센서스(FMP)
 # 필요 ENV: FMP_API_KEY
 python3 -m src.analysis.cli stock fmp "AAPL" --limit 5
 ```
 
-> FMP 호출이 401/403 또는 플랜 제한으로 실패해도 분석을 중단하지 말고,
-> EDGAR + 뉴스 + 거시 데이터 기반으로 계속 진행하라. FMP 미수집 항목은 Needs Data에 명시하라.
+> FMP 호출이 401/403, 플랜 제한, 키 미설정으로 실패해도 분석을 중단하지 말고,
+> **EDGAR + 뉴스 + 거시 데이터(무료 소스)** 기반으로 계속 진행하라.
+> FMP 미수집 항목은 `Needs Data`로 명시하고, 가능하면 EDGAR 수치로 대체 추정(P/S, 성장률, 마진 추세)을 제시하라.
 
 #### 1-3. 주식 관련 뉴스 수집
 
@@ -81,6 +91,22 @@ PY
 python3 -m src.analysis.cli series fred FEDFUNDS --limit 6
 python3 -m src.analysis.cli series ecos 722Y001 --limit 6
 ```
+
+#### 1-6. 무료 검증 소스 보강 (권장)
+
+아래는 키 없이 접근 가능한 검증 소스다. 업종에 맞는 것만 선택해 추가 수집하라.
+
+```bash
+# 회사 IR 페이지 (URL을 알고 있을 때)
+python3 -m src.analysis.cli document "https://www.unitedhealthgroup.com/investors.html" --max-chars 4000
+
+# 헬스케어 보험/정책 민감 종목일 때 CMS 공개 페이지
+python3 -m src.analysis.cli document "https://www.cms.gov/medicare/payment/medicare-advantage-rates-statistics" --max-chars 4000
+python3 -m src.analysis.cli document "https://www.cms.gov/medicare/health-drug-plans/part-c-d-performance-data" --max-chars 4000
+```
+
+> 특정 회사/섹터에서 공식기관 공개 데이터가 있으면 우선 채택하라.
+> 단, 문서 수집이 실패해도 전체 분석은 계속 진행하라.
 
 ---
 
@@ -170,7 +196,8 @@ Step 2의 6개 분석 결과를 모두 받은 후, **stock-critic 에이전트**
 매수/중립/매도 성향을 명시하되, 투자 권유가 아님을 고지하라.]
 
 ### 📁 데이터 출처
-- 재무제표: [DART / SEC EDGAR]
+- 무료 공개(필수): [DART / SEC EDGAR / IR / CMS 등 실제 사용 항목]
+- 선택 보강(선택): [FMP 등 키 기반 소스 사용 시만]
 - 뉴스: [사용한 피드 목록]
 - 거시 컨텍스트: [macro_analysis_results 포함 여부]
 - 거시 지표: [FRED, ECOS 사용 시리즈]
@@ -237,7 +264,8 @@ DB가 없거나 저장 중 예외가 발생하면, 저장을 건너뛰고 Step 4
 
 - Step 2의 6개 에이전트는 **반드시 병렬로 실행**하라 (단일 메시지, 여러 Task tool 호출).
 - Step 3의 Critic은 Step 2가 **완료된 후** 순차적으로 실행하라.
-- 재무제표 수집 실패(API 키 미설정 등)는 건너뛰고 뉴스·공시로 대체하라.
+- 무료 공개 데이터(공시/IR/공공기관) 수집을 먼저 완료한 뒤 선택 보강 소스를 붙여라.
+- FMP 등 키 기반 소스 실패(API 키 미설정/401/403/플랜 제한)는 분석 중단 사유가 아니다. 무료 근거로 계속 진행하라.
 - `series`, `anomaly` 명령어가 오류를 반환하면 자동으로 건너뛰고 계속 진행하라.
 - 각 에이전트 결과 마지막 줄의 POSITION 요약을 수렴 합성에 반드시 반영하라.
 - 투자 결론은 항상 "이 분석은 투자 권유가 아닙니다" 고지를 포함하라.
