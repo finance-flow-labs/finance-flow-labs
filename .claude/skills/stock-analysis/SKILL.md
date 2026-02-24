@@ -120,7 +120,28 @@ python3 -m src.analysis.cli stock fmp "005930.KS" --limit 5
 # US 우선: FMP quote (성공 시 즉시 채택)
 python3 -m src.analysis.cli stock fmp "AAPL" --limit 1
 
-# US fallback: stooq 공개 시세 (키 불필요, 지연 가능)
+# US fallback 1: Yahoo Finance chart endpoint (키 불필요)
+python3 - <<'PY'
+import json, datetime, urllib.request
+symbol = "AAPL"  # 티커 치환
+url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1m&range=1d"
+req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+with urllib.request.urlopen(req, timeout=20) as r:
+    payload = json.loads(r.read().decode("utf-8"))
+result = payload["chart"]["result"][0]
+meta = result.get("meta", {})
+ts = (result.get("timestamp") or [None])[-1]
+as_of = datetime.datetime.utcfromtimestamp(ts).isoformat() + "Z" if ts else None
+print({
+    "symbol": meta.get("symbol"),
+    "price": meta.get("regularMarketPrice"),
+    "currency": meta.get("currency"),
+    "as_of": as_of,
+    "source": "YAHOO_CHART_V8",
+})
+PY
+
+# US fallback 2: stooq 공개 시세 (키 불필요, 지연 가능)
 python3 - <<'PY'
 import csv, io, urllib.request
 symbol = "aapl.us"  # 티커 치환
@@ -153,9 +174,30 @@ print({
     "source": "NAVER_REALTIME",
 })
 PY
+
+# KR fallback 2: Yahoo Finance chart endpoint (005930.KS)
+python3 - <<'PY'
+import json, datetime, urllib.request
+symbol = "005930.KS"  # 티커 치환
+url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1m&range=1d"
+req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+with urllib.request.urlopen(req, timeout=20) as r:
+    payload = json.loads(r.read().decode("utf-8"))
+result = payload["chart"]["result"][0]
+meta = result.get("meta", {})
+ts = (result.get("timestamp") or [None])[-1]
+as_of = datetime.datetime.utcfromtimestamp(ts).isoformat() + "Z" if ts else None
+print({
+    "symbol": meta.get("symbol"),
+    "price": meta.get("regularMarketPrice"),
+    "currency": meta.get("currency"),
+    "as_of": as_of,
+    "source": "YAHOO_CHART_V8",
+})
+PY
 ```
 
-> 가격 소스 우선순위(권장): **공식 거래소/브로커 API > FMP quote > 공개 시세 fallback(stooq/naver)**.
+> 가격 소스 우선순위(권장): **공식 거래소/브로커 API > FMP quote > Yahoo chart(v8) > 공개 시세 fallback(stooq/naver)**.
 > fallback 가격을 쓴 경우 본문에 반드시 `fallback price`라고 명시하고 신뢰도를 한 단계 낮춰라.
 > 가격이 끝내 확보되지 않으면 분석을 중단하고 `Needs Data: CURRENT_PRICE_UNAVAILABLE`를 반환하라.
 
