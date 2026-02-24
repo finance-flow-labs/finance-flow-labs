@@ -9,6 +9,11 @@ description: 개별 주식 멀티에이전트 토론 분석. Bull/Bear/Fundament
 
 > **기본 동작**: 종목명/티커가 포함된 자유 텍스트 입력을 지원합니다. ("삼성전자 분석해줘", "Analyze Apple", "TSMC 어때?")
 > **시장 자동 감지**: 한국어 종목명 또는 `.KS`/`.KQ` 티커 → DART(KR), 영문 티커 → SEC EDGAR(US)
+>
+> **시간 정합성 규칙(매우 중요)**
+> - 연도를 하드코딩하지 말고, **현재 시점 기준 최신 데이터**를 사용하라.
+> - KR 분석에서 `Y-1` 연간(사업보고서) 데이터가 비어 있으면, 자동으로 `Y-2` 연간 + `Y-1/Y` 최신 분기/잠정 공시 신호로 보완하라.
+> - 리포트 본문에 반드시 **"데이터 기준 시점"**과 **"fallback 이유"**를 명시하라.
 
 ### 무료 공개 데이터 우선 + FMP 상시 시도 원칙 (필수)
 
@@ -27,35 +32,82 @@ description: 개별 주식 멀티에이전트 토론 분석. Bull/Bear/Fundament
 #### 1-1. 종목 식별 (한국: DART / 미국: SEC EDGAR)
 
 ```bash
-# 한국 종목 검색 (회사명 또는 티커)
-python3 -m src.analysis.cli stock dart "삼성전자"
+# 한국 종목은 먼저 corp_code를 확정한다 (예: 삼성전자=00126380, stock_code=005930)
+python3 - <<'PY'
+import os, json, urllib.request, urllib.parse, zipfile, io, xml.etree.ElementTree as ET
+api_key = os.getenv("OPEN_DART_API_KEY") or os.getenv("DART_API_KEY")
+if not api_key:
+    raise SystemExit("OPEN_DART_API_KEY (or DART_API_KEY) is required")
+query = "삼성전자"
+qs = urllib.parse.urlencode({"crtfc_key": api_key})
+url = f"https://opendart.fss.or.kr/api/corpCode.xml?{qs}"
+req = urllib.request.Request(url, headers={"User-Agent": "FinanceFlowLabs/1.0"})
+with urllib.request.urlopen(req, timeout=40) as r:
+    blob = r.read()
+zf = zipfile.ZipFile(io.BytesIO(blob))
+root = ET.fromstring(zf.read(zf.namelist()[0]))
+matches = []
+for li in root.findall("list"):
+    corp_name = (li.findtext("corp_name") or "").strip()
+    stock_code = (li.findtext("stock_code") or "").strip()
+    if query in corp_name or query == stock_code:
+        matches.append({
+            "corp_code": (li.findtext("corp_code") or "").strip(),
+            "corp_name": corp_name,
+            "stock_code": stock_code,
+            "modify_date": (li.findtext("modify_date") or "").strip(),
+        })
+print(json.dumps(matches[:10], ensure_ascii=False, indent=2))
+PY
 
 # 미국 종목 검색 (회사명 또는 티커)
 python3 -m src.analysis.cli stock edgar "Apple"
 ```
 
-검색 결과에서 회사명, 티커, corp_code(KR) 또는 CIK(US)를 확인하라.
+검색 결과에서 회사명, 티커, **corp_code(KR)** 또는 CIK(US)를 확인하라.
 
 #### 1-2. 재무제표/밸류에이션 수집 (무료 기본 + FMP 상시 시도)
 
 ```bash
-# 한국: 최근 2개년 재무제표 (corp_code 또는 티커)
+# 한국: 최신 연차 우선 + fallback 연차 수집 (corp_code 필수, 연도 하드코딩 금지)
 # 필요 ENV: OPEN_DART_API_KEY (무료 발급)
-python3 -m src.analysis.cli stock dart "005930" --year 2024
-python3 -m src.analysis.cli stock dart "005930" --year 2023
+YEAR=$(date -u +%Y)
+CORP_CODE="00126380"   # 예시: 삼성전자
+python3 -m src.analysis.cli stock dart "$CORP_CODE" --year $((YEAR-1))
+python3 -m src.analysis.cli stock dart "$CORP_CODE" --year $((YEAR-2))
+
+# 한국: 최신 분기/잠정 공시 신호 보강 (Y-1/Y 기준)
+python3 - <<'PY'
+import json
+from src.analysis.stock_client import DartStockClient
+corp_code = "00126380"  # 대상 종목으로 교체
+client = DartStockClient()
+items = client.fetch_disclosures(corp_code, limit=20)
+signals = [
+    x for x in items
+    if any(k in (x.get("report_nm", "")) for k in ["잠정", "분기보고서", "반기보고서", "사업보고서"])
+]
+print(json.dumps(signals, ensure_ascii=False, indent=2))
+PY
 
 # 미국(무료 기본): SEC EDGAR company facts + 최근 10-K/10-Q
 python3 -m src.analysis.cli stock edgar "AAPL"
 
-# 미국(FMP 상시 시도): 주가/멀티플/컨센서스
+# 미국/한국(FMP 상시 시도): 주가/멀티플/컨센서스
 # 필요 ENV: FMP_API_KEY (미설정이어도 호출 시도 후 실패 처리)
 python3 -m src.analysis.cli stock fmp "AAPL" --limit 5
+python3 -m src.analysis.cli stock fmp "005930.KS" --limit 5
 ```
 
+**KR 최신성 fallback 규칙 (필수 적용):**
+1. `Y-1` 연간 재무가 유효(핵심 계정: 매출/영업이익/당기순이익 존재)하면 이를 최신 연차로 사용.
+2. `Y-1` 연간이 비거나 공백이면 `Y-2` 연간을 기준으로 사용하고, `Y-1/Y`의 분기·잠정 공시 신호로 최신성 보완.
+3. DART 현금흐름 항목이 비어 있으면 숫자를 추정해 채우지 말고 `Needs Data`로 분리 표기.
+
 > FMP는 **항상 호출 시도**하라.
-> 단, 401/403, 플랜 제한, 키 미설정으로 실패해도 분석을 중단하지 말고
-> **EDGAR + 뉴스 + 거시 데이터(무료 소스)** 기반으로 계속 진행하라.
-> FMP 미수집 항목은 `Needs Data`로 명시하고, 가능하면 EDGAR 수치로 대체 추정(P/S, 성장률, 마진 추세)을 제시하라.
+> 단, 401/402/403, 플랜 제한, 키 미설정으로 실패해도 분석을 중단하지 말고
+> **DART/EDGAR + 뉴스 + 거시 데이터(무료 소스)** 기반으로 계속 진행하라.
+> FMP 미수집 항목은 `Needs Data`로 명시하고, 가능하면 EDGAR/DART 수치 기반 대체 추정(성장률, 마진 추세)을 제시하라.
 
 #### 1-3. 주식 관련 뉴스 수집
 
@@ -202,6 +254,7 @@ Step 2의 6개 분석 결과를 모두 받은 후, **stock-critic 에이전트**
 - 뉴스: [사용한 피드 목록]
 - 거시 컨텍스트: [macro_analysis_results 포함 여부]
 - 거시 지표: [FRED, ECOS 사용 시리즈]
+- 데이터 시점/결손: [예: `Y-1` 연차 부재로 `Y-2` 연차 + `Y-1/Y` 공시 신호 사용, FMP 402 항목은 Needs Data 처리]
 
 ---
 
@@ -266,7 +319,9 @@ DB가 없거나 저장 중 예외가 발생하면, 저장을 건너뛰고 Step 4
 - Step 2의 6개 에이전트는 **반드시 병렬로 실행**하라 (단일 메시지, 여러 Task tool 호출).
 - Step 3의 Critic은 Step 2가 **완료된 후** 순차적으로 실행하라.
 - 무료 공개 데이터(공시/IR/공공기관) 수집을 먼저 완료하고, FMP를 **항상 호출 시도**하라.
-- FMP 실패(API 키 미설정/401/403/플랜 제한)는 분석 중단 사유가 아니다. 무료 근거로 계속 진행하라.
+- FMP 실패(API 키 미설정/401/402/403/플랜 제한)는 분석 중단 사유가 아니다. 무료 근거로 계속 진행하라.
+- 재무제표 수집 실패(API 키 미설정 등)는 건너뛰고 뉴스·공시로 대체하라.
+- KR 분석에서 연도 하드코딩(예: 항상 2024) 금지. 항상 현재 시점 기준 `Y-1 → Y-2` fallback 규칙을 적용하라.
 - `series`, `anomaly` 명령어가 오류를 반환하면 자동으로 건너뛰고 계속 진행하라.
 - 각 에이전트 결과 마지막 줄의 POSITION 요약을 수렴 합성에 반드시 반영하라.
 - 투자 결론은 항상 "이 분석은 투자 권유가 아닙니다" 고지를 포함하라.
