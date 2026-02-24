@@ -14,6 +14,11 @@ description: 개별 주식 멀티에이전트 토론 분석. Bull/Bear/Fundament
 > - 연도를 하드코딩하지 말고, **현재 시점 기준 최신 데이터**를 사용하라.
 > - KR 분석에서 `Y-1` 연간(사업보고서) 데이터가 비어 있으면, 자동으로 `Y-2` 연간 + `Y-1/Y` 최신 분기/잠정 공시 신호로 보완하라.
 > - 리포트 본문에 반드시 **"데이터 기준 시점"**과 **"fallback 이유"**를 명시하라.
+>
+> **현재가격 강제 규칙(필수)**
+> - 분석 시작 전에 **반드시 현재가격(또는 최신 체결가)**를 수집하라.
+> - 최소 필드: `price`, `as_of`(로컬/UTC 시각), `source`.
+> - 가격 수집에 실패하면 매수/중립/매도 결론을 내리지 말고 `Needs Data`로 종료하라.
 
 ### 무료 공개 데이터 우선 + FMP 상시 시도 원칙 (필수)
 
@@ -109,6 +114,51 @@ python3 -m src.analysis.cli stock fmp "005930.KS" --limit 5
 > **DART/EDGAR + 뉴스 + 거시 데이터(무료 소스)** 기반으로 계속 진행하라.
 > FMP 미수집 항목은 `Needs Data`로 명시하고, 가능하면 EDGAR/DART 수치 기반 대체 추정(성장률, 마진 추세)을 제시하라.
 
+#### 1-2b. 현재가격 수집 (필수 게이트)
+
+```bash
+# US 우선: FMP quote (성공 시 즉시 채택)
+python3 -m src.analysis.cli stock fmp "AAPL" --limit 1
+
+# US fallback: stooq 공개 시세 (키 불필요, 지연 가능)
+python3 - <<'PY'
+import csv, io, urllib.request
+symbol = "aapl.us"  # 티커 치환
+url = f"https://stooq.com/q/l/?s={symbol}&f=sd2t2ohlcv&h&e=csv"
+req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+with urllib.request.urlopen(req, timeout=20) as r:
+    row = list(csv.DictReader(io.StringIO(r.read().decode("utf-8"))))[0]
+print(row)
+PY
+
+# KR 우선: FMP 005930.KS quote (플랜 제한 가능)
+python3 -m src.analysis.cli stock fmp "005930.KS" --limit 1
+
+# KR fallback(권장): 네이버 실시간 API (키 불필요)
+python3 - <<'PY'
+import json, urllib.request
+code = "005930"  # 종목코드 치환
+url = f"https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:{code}|SERVICE_RECENT_ITEM:{code}"
+req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+with urllib.request.urlopen(req, timeout=20) as r:
+    payload = json.loads(r.read().decode("euc-kr"))
+item = payload["result"]["areas"][0]["datas"][0]
+print({
+    "code": item.get("cd"),
+    "name": item.get("nm"),
+    "price": item.get("nv"),
+    "change": item.get("cv"),
+    "change_pct": item.get("cr"),
+    "market_state": item.get("ms"),
+    "source": "NAVER_REALTIME",
+})
+PY
+```
+
+> 가격 소스 우선순위(권장): **공식 거래소/브로커 API > FMP quote > 공개 시세 fallback(stooq/naver)**.
+> fallback 가격을 쓴 경우 본문에 반드시 `fallback price`라고 명시하고 신뢰도를 한 단계 낮춰라.
+> 가격이 끝내 확보되지 않으면 분석을 중단하고 `Needs Data: CURRENT_PRICE_UNAVAILABLE`를 반환하라.
+
 #### 1-3. 주식 관련 뉴스 수집
 
 ```bash
@@ -196,6 +246,7 @@ Step 2의 6개 분석 결과를 모두 받은 후, **stock-critic 에이전트**
 
 **종목:** [회사명] ([티커])
 **시장:** [KR / US]
+**현재가 기준:** [price] ([source], [as_of])
 **분석 기준일:** [현재 날짜]
 
 ---
@@ -250,6 +301,7 @@ Step 2의 6개 분석 결과를 모두 받은 후, **stock-critic 에이전트**
 
 ### 📁 데이터 출처
 - 무료 공개(필수): [DART / SEC EDGAR / IR / CMS 등 실제 사용 항목]
+- 현재가 소스(필수): [예: KRX/NAVER realtime, FMP quote, stooq fallback + as_of]
 - FMP(상시 시도): [성공 시 사용 근거, 실패 시 Needs Data와 실패 사유]
 - 뉴스: [사용한 피드 목록]
 - 거시 컨텍스트: [macro_analysis_results 포함 여부]
@@ -322,6 +374,7 @@ DB가 없거나 저장 중 예외가 발생하면, 저장을 건너뛰고 Step 4
 - FMP 실패(API 키 미설정/401/402/403/플랜 제한)는 분석 중단 사유가 아니다. 무료 근거로 계속 진행하라.
 - 재무제표 수집 실패(API 키 미설정 등)는 건너뛰고 뉴스·공시로 대체하라.
 - KR 분석에서 연도 하드코딩(예: 항상 2024) 금지. 항상 현재 시점 기준 `Y-1 → Y-2` fallback 규칙을 적용하라.
+- **현재가격 수집은 필수 게이트**: 가격/시각/소스를 확보하기 전에는 결론을 내리지 말고, 실패 시 `Needs Data: CURRENT_PRICE_UNAVAILABLE`로 종료하라.
 - `series`, `anomaly` 명령어가 오류를 반환하면 자동으로 건너뛰고 계속 진행하라.
 - 각 에이전트 결과 마지막 줄의 POSITION 요약을 수렴 합성에 반드시 반영하라.
 - 투자 결론은 항상 "이 분석은 투자 권유가 아닙니다" 고지를 포함하라.
