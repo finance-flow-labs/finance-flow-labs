@@ -19,6 +19,12 @@ description: 개별 주식 멀티에이전트 토론 분석. Bull/Bear/Fundament
 > - 분석 시작 전에 **반드시 현재가격(또는 최신 체결가)**를 수집하라.
 > - 최소 필드: `price`, `as_of`(로컬/UTC 시각), `source`.
 > - 가격 수집에 실패하면 매수/중립/매도 결론을 내리지 말고 `Needs Data`로 종료하라.
+>
+> **타이밍/과열 검증 규칙(필수)**
+> - 현재가만 보지 말고, `1M/3M/6M/1Y 수익률`과 `52주 고점 대비 괴리`를 함께 계산하라.
+> - 단기 급등(예: 3M 수익률 > +50% 또는 6M > +100%) + 52주 고점 근접(예: -3% 이내)인 경우,
+>   밸류가 싸 보여도 기본 결론은 `추격매수 금지`/`조정 시 분할`로 보수화하라.
+> - 리포트에 "좋은 종목"과 "좋은 가격"을 분리해 서술하라.
 
 ### 무료 공개 데이터 우선 + FMP 상시 시도 원칙 (필수)
 
@@ -201,6 +207,51 @@ PY
 > fallback 가격을 쓴 경우 본문에 반드시 `fallback price`라고 명시하고 신뢰도를 한 단계 낮춰라.
 > 가격이 끝내 확보되지 않으면 분석을 중단하고 `Needs Data: CURRENT_PRICE_UNAVAILABLE`를 반환하라.
 
+#### 1-2c. 가격 위치/과열 체크 (필수)
+
+```bash
+# 1년 일봉 기준으로 1M/3M/6M/1Y 수익률 + 52주 고점 대비 괴리 계산 (Yahoo chart)
+python3 - <<'PY'
+import json, bisect, datetime, urllib.request
+symbol = "000660.KS"  # 티커 치환
+url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y"
+req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+with urllib.request.urlopen(req, timeout=20) as r:
+    payload = json.loads(r.read().decode("utf-8"))
+result = payload["chart"]["result"][0]
+closes = result["indicators"]["quote"][0]["close"]
+timestamps = result["timestamp"]
+pairs = [(t, c) for t, c in zip(timestamps, closes) if c is not None]
+all_t = [t for t, _ in pairs]
+all_c = [c for _, c in pairs]
+last_t, last_px = pairs[-1]
+
+def ret(days: int):
+    target = last_t - days * 86400
+    i = bisect.bisect_left(all_t, target)
+    if i >= len(all_c):
+        i = len(all_c) - 1
+    base = all_c[i]
+    return (last_px / base - 1) * 100 if base else None
+
+high_1y = max(all_c)
+dist_to_high = (last_px / high_1y - 1) * 100 if high_1y else None
+print({
+    "symbol": symbol,
+    "as_of": datetime.datetime.utcfromtimestamp(last_t).isoformat() + "Z",
+    "ret_1m_pct": ret(30),
+    "ret_3m_pct": ret(90),
+    "ret_6m_pct": ret(180),
+    "ret_1y_pct": ret(365),
+    "dist_to_52w_high_pct": dist_to_high,
+    "at_52w_high": abs(dist_to_high or 0) <= 0.5,
+})
+PY
+```
+
+> 과열 판정 예시: `ret_3m_pct > 50` 또는 `ret_6m_pct > 100`, 그리고 `dist_to_52w_high_pct >= -3`.
+> 과열 시 기본 행동: `Buy` 대신 `Neutral to Buy-on-dip`, **추격매수 금지**, 분할 진입 비중 축소.
+
 #### 1-3. 주식 관련 뉴스 수집
 
 ```bash
@@ -336,14 +387,27 @@ Step 2의 6개 분석 결과를 모두 받은 후, **stock-critic 에이전트**
 - [Bull vs Bear, Value vs Growth 등 핵심 견해 차이]
 - ...
 
+### 🧭 가격 위치/타이밍 점검
+- [1M/3M/6M/1Y 수익률]
+- [52주 고점 대비 괴리]
+- [과열 여부 판정 + 추격매수/조정매수 가이드]
+
 ### 🎯 수렴 인사이트
 [7개 관점을 종합하되 Critic의 비판을 반영한 균형 잡힌 최종 결론.
 투자·리스크 관리 관점에서 실용적 함의를 제시하라.
 매수/중립/매도 성향을 명시하되, 투자 권유가 아님을 고지하라.]
 
+### 🧾 최종 의사결정 요약 (필수)
+- `RECOMMENDATION:` [Buy / Neutral / Sell / Neutral to Buy-on-dip]
+- `CONFIDENCE:` [0~1]
+- `WHY NOW:` [핵심 2~3줄]
+- `INVALIDATION TRIGGERS:` [3개 이내]
+- `POSITION SIZING IDEA:` [분할/비중/리스크 캡]
+
 ### 📁 데이터 출처
 - 무료 공개(필수): [DART / SEC EDGAR / IR / CMS 등 실제 사용 항목]
-- 현재가 소스(필수): [예: KRX/NAVER realtime, FMP quote, stooq fallback + as_of]
+- 현재가 소스(필수): [예: KRX/NAVER realtime, FMP quote, Yahoo chart(v8), stooq + as_of]
+- 가격 위치/타이밍 소스(필수): [Yahoo 1y chart 등 1M/3M/6M/1Y, 52주 고점 괴리 계산 근거]
 - FMP(상시 시도): [성공 시 사용 근거, 실패 시 Needs Data와 실패 사유]
 - 뉴스: [사용한 피드 목록]
 - 거시 컨텍스트: [macro_analysis_results 포함 여부]
@@ -417,6 +481,8 @@ DB가 없거나 저장 중 예외가 발생하면, 저장을 건너뛰고 Step 4
 - 재무제표 수집 실패(API 키 미설정 등)는 건너뛰고 뉴스·공시로 대체하라.
 - KR 분석에서 연도 하드코딩(예: 항상 2024) 금지. 항상 현재 시점 기준 `Y-1 → Y-2` fallback 규칙을 적용하라.
 - **현재가격 수집은 필수 게이트**: 가격/시각/소스를 확보하기 전에는 결론을 내리지 말고, 실패 시 `Needs Data: CURRENT_PRICE_UNAVAILABLE`로 종료하라.
+- **타이밍/과열 체크는 필수 게이트**: 1M/3M/6M/1Y 수익률과 52주 고점 괴리를 계산하고, 과열 시 기본 결론을 보수화(`Neutral to Buy-on-dip`)하라.
+- **추격매수 금지 원칙**: 단기 급등 + 고점 근접 구간에서는 신규 비중을 축소하고, 조정/확인 후 분할 진입을 우선하라.
 - `series`, `anomaly` 명령어가 오류를 반환하면 자동으로 건너뛰고 계속 진행하라.
 - 각 에이전트 결과 마지막 줄의 POSITION 요약을 수렴 합성에 반드시 반영하라.
 - 투자 결론은 항상 "이 분석은 투자 권유가 아닙니다" 고지를 포함하라.
